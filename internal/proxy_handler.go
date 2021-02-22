@@ -1,7 +1,7 @@
 package internal
 
 import (
-	"fmt"
+	"encoding/json"
 
 	"github.com/valyala/fasthttp"
 
@@ -16,10 +16,17 @@ type ProxyHandler struct{}
 // - Find request related service (based on passed in user credentials)
 // - Transparent proxy
 func (h *ProxyHandler) ForwardHandler(ctx *fasthttp.RequestCtx) {
-	fmt.Fprintf(ctx, "Proxy index")
 	h.validateRequest(ctx)
+
+	debugResponse, _ := BuildProxyDebugResponseFromCtx(ctx)
+
+	ctx.Response.Header.SetCanonical([]byte("Content-Type"), []byte("application/json"))
+	ctx.SetStatusCode(200)
+	jsonStr, _ := json.Marshal(debugResponse)
+	ctx.Write(jsonStr)
 }
 
+//validateRequest checks whether the request can be forwarded to backend services
 func (h *ProxyHandler) validateRequest(ctx *fasthttp.RequestCtx) {
 	user, err := h.identifyUser(ctx)
 	CheckError(err)
