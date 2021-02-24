@@ -29,6 +29,16 @@ func ExtractCtxRequestDetail(ctx *fasthttp.RequestCtx) (RequestDetail, error){
 
 	ctx.Request.Header.VisitAll(func(key, value []byte) {
 		detail.Headers[string(key)] = append(detail.Headers[string(key)], string(value))
+
+		// If a request is websocket request, it shouldn't change back to restful one, so this check should only be applied on potential websocket request
+		if !detail.IsWebsocket {
+			if (bytes.Compare(detail.URI.Scheme(), []byte("wss")) == 0) ||
+				(bytes.Compare(detail.URI.Scheme(), []byte("ws")) == 0) ||
+				(bytes.Compare(key, []byte("Upgrade")) == 0 && bytes.Compare(value, []byte("websocket")) == 0) ||
+				(bytes.Compare(key, []byte("Connection")) == 0 && bytes.Compare(value, []byte("Upgrade")) == 0) {
+				detail.IsWebsocket = true
+			}
+		}
 	})
 
 	ctx.QueryArgs().VisitAll(func(key, value []byte) {

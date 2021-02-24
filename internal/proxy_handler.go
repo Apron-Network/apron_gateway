@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -28,13 +29,22 @@ func (h *ProxyHandler) ForwardHandler(ctx *fasthttp.RequestCtx) {
 	h.validateRequest(ctx)
 
 	resp, err := h.sendRequestToService(ctx)
-	CheckError(err)
+	if err != nil {
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		ctx.Write([]byte(err.Error()))
+		return
+	}
 
 	h.respondToClient(ctx, resp)
 }
 
 func (h *ProxyHandler) sendRequestToService(ctx *fasthttp.RequestCtx) (*http.Response, error) {
 	requestDetail, _ := ExtractCtxRequestDetail(ctx)
+	fmt.Printf("Client request detail: %+v\n", requestDetail)
+
+	if requestDetail.IsWebsocket {
+		return nil, errors.New("websocket support is under development")
+	}
 
 	// Build URI, the forward URL is local httpbin URL
 	serviceUrl, _ := url.Parse(SERVICE_URI_STR)
