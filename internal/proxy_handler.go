@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	SERVIC_URI_STR = "http://localhost:2345/anything"
+	SERVICE_URI_STR = "http://localhost:2345/anything"
 )
 
 type ProxyHandler struct {
@@ -37,14 +37,20 @@ func (h *ProxyHandler) sendRequestToService(ctx *fasthttp.RequestCtx) (*http.Res
 	requestDetail, _ := ExtractCtxRequestDetail(ctx)
 
 	// Build URI, the forward URL is local httpbin URL
-	serviceUrl, _ := url.Parse(SERVIC_URI_STR)
-	serviceUrl.Path += requestDetail.Path
-	fmt.Printf("ServiceURL: %+v\n", requestDetail.URI)
+	serviceUrl, _ := url.Parse(SERVICE_URI_STR)
+	if requestDetail.Path != "/" {
+		serviceUrl.Path += requestDetail.Path
+	}
+
+	query := serviceUrl.Query()
 	for k, values := range requestDetail.QueryParams {
 		for _, v := range values {
-			serviceUrl.Query().Set(k, v)
+			query.Add(k, v)
 		}
 	}
+	serviceUrl.RawQuery = query.Encode()
+
+	fmt.Printf("host: %+v, path: %+v, queries: %+v\n", serviceUrl.Host, serviceUrl.Path, serviceUrl.RawQuery)
 
 	// Build request, query params are included in URI
 	req, _ := http.NewRequest(requestDetail.Method, serviceUrl.String(), bytes.NewBuffer([]byte(requestDetail.RequestBody)))
@@ -60,17 +66,21 @@ func (h *ProxyHandler) sendRequestToService(ctx *fasthttp.RequestCtx) (*http.Res
 	return h.HttpClient.Do(req)
 }
 
-func (h *ProxyHandler) respondToClient(ctx *fasthttp.RequestCtx, resp *http.Response) {
-	ctx.SetStatusCode(resp.StatusCode)
-	for k, values := range resp.Header {
-		for _, v:= range values {
-			ctx.Response.Header.SetCanonical([]byte(k), []byte(v))
+func (h *ProxyHandler) respondToClient(ctx *fasthttp.RequestCtx, proxyResponse *http.Response) {
+	ctx.SetStatusCode(proxyResponse.StatusCode)
+	fmt.Printf("Proxy response header: %+v\n", proxyResponse.Header)
+
+	// TODO: Only set fields should be visible for client
+	for k, values := range proxyResponse.Header {
+		for _, v := range values {
+			fmt.Printf("proxy Resp header: %s\n", k)
+				ctx.Response.Header.Set(k, v)
 		}
 	}
 
 	// TODO: Check cookies
 
-	ctx.SetBodyStream(resp.Body, int(resp.ContentLength))
+	ctx.SetBodyStream(proxyResponse.Body, int(proxyResponse.ContentLength))
 }
 
 //validateRequest checks whether the request can be forwarded to backend services
