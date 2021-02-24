@@ -2,7 +2,6 @@ package internal
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -28,24 +27,20 @@ type ProxyHandler struct {
 func (h *ProxyHandler) ForwardHandler(ctx *fasthttp.RequestCtx) {
 	h.validateRequest(ctx)
 
-	resp, err := h.sendRequestToService(ctx)
-	if err != nil {
-		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
-		ctx.Write([]byte(err.Error()))
-		return
-	}
-
-	h.respondToClient(ctx, resp)
-}
-
-func (h *ProxyHandler) sendRequestToService(ctx *fasthttp.RequestCtx) (*http.Response, error) {
 	requestDetail, _ := ExtractCtxRequestDetail(ctx)
-	fmt.Printf("Client request detail: %+v\n", requestDetail)
 
 	if requestDetail.IsWebsocket {
-		return nil, errors.New("websocket support is under development")
+		h.forwardWebsocketRequest(ctx, &requestDetail)
+	} else {
+		h.forwardHttpRequest(ctx, &requestDetail)
 	}
+}
+func (h *ProxyHandler) forwardWebsocketRequest(ctx *fasthttp.RequestCtx, requestDetail *RequestDetail) {
+	ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+	ctx.WriteString("websocket support is under development")
+}
 
+func (h *ProxyHandler) forwardHttpRequest(ctx *fasthttp.RequestCtx, requestDetail *RequestDetail) {
 	// Build URI, the forward URL is local httpbin URL
 	serviceUrl, _ := url.Parse(SERVICE_URI_STR)
 	if bytes.Compare(requestDetail.Path, []byte("/")) != 0 {
@@ -74,10 +69,14 @@ func (h *ProxyHandler) sendRequestToService(ctx *fasthttp.RequestCtx) (*http.Res
 
 	}
 
-	return h.HttpClient.Do(req)
-}
+	proxyResponse, err := h.HttpClient.Do(req)
 
-func (h *ProxyHandler) respondToClient(ctx *fasthttp.RequestCtx, proxyResponse *http.Response) {
+	if err != nil {
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		ctx.Write([]byte(err.Error()))
+		return
+	}
+
 	ctx.SetStatusCode(proxyResponse.StatusCode)
 	fmt.Printf("Proxy response header: %+v\n", proxyResponse.Header)
 
@@ -85,7 +84,7 @@ func (h *ProxyHandler) respondToClient(ctx *fasthttp.RequestCtx, proxyResponse *
 	for k, values := range proxyResponse.Header {
 		for _, v := range values {
 			fmt.Printf("proxy Resp header: %s\n", k)
-				ctx.Response.Header.Set(k, v)
+			ctx.Response.Header.Set(k, v)
 		}
 	}
 
@@ -93,6 +92,8 @@ func (h *ProxyHandler) respondToClient(ctx *fasthttp.RequestCtx, proxyResponse *
 
 	ctx.SetBodyStream(proxyResponse.Body, int(proxyResponse.ContentLength))
 }
+
+// TODO: Validator related, perhaps can move to a new middleware
 
 //validateRequest checks whether the request can be forwarded to backend services
 func (h *ProxyHandler) validateRequest(ctx *fasthttp.RequestCtx) {
