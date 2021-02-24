@@ -48,8 +48,9 @@ func (h *ProxyHandler) sendRequestToService(ctx *fasthttp.RequestCtx) (*http.Res
 
 	// Build URI, the forward URL is local httpbin URL
 	serviceUrl, _ := url.Parse(SERVICE_URI_STR)
-	if requestDetail.Path != "/" {
-		serviceUrl.Path += requestDetail.Path
+	if bytes.Compare(requestDetail.Path, []byte("/")) != 0 {
+		// TODO: Check whether need to replace with fasthttp client for better performance
+		serviceUrl.Path += string(requestDetail.Path)
 	}
 
 	query := serviceUrl.Query()

@@ -1,25 +1,30 @@
 package internal
 
-import "github.com/valyala/fasthttp"
+import (
+	"bytes"
+
+	"github.com/valyala/fasthttp"
+)
 
 type RequestDetail struct {
-	URI string
-	Host string
-	Path string
-	Method string
-	Headers map[string][]string
-	Cookies map[string][]string
+	URI         *fasthttp.URI
+	Host        []byte
+	Path        []byte
+	Method      string
+	Headers     map[string][]string
+	Cookies     map[string][]string
 	QueryParams map[string][]string
-	FormParams map[string][]string
+	FormParams  map[string][]string
 	RequestBody string
+	IsWebsocket bool
 }
 
-func ExtractCtxRequestDetail(ctx *fasthttp.RequestCtx) (RequestDetail, error){
+func ExtractCtxRequestDetail(ctx *fasthttp.RequestCtx) (RequestDetail, error) {
 	detail := RequestDetail{}
 
-	detail.URI = ctx.URI().String()
-	detail.Host = string(ctx.Host())
-	detail.Path = string(ctx.URI().Path())
+	detail.URI = ctx.URI()
+	detail.Host = ctx.Host()
+	detail.Path = ctx.URI().Path()
 
 	detail.Method = string(ctx.Method())
 
@@ -54,7 +59,6 @@ func ExtractCtxRequestDetail(ctx *fasthttp.RequestCtx) (RequestDetail, error){
 			detail.FormParams[string(key)] = append(detail.FormParams[string(key)], string(value))
 		})
 	}
-
 
 	return detail, nil
 }
