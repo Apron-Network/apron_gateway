@@ -16,7 +16,7 @@ import (
 
 var (
 	RestServiceUrlStr = "http://localhost:2345/anything"
-	WsServiceUrlStr = "wss://stream.binance.com:9443/ws/bnbbtc@depth"
+	WsServiceUrlStr   = "wss://stream.binance.com:9443/ws/bnbbtc@depth"
 )
 
 type ProxyHandler struct {
