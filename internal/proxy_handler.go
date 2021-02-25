@@ -3,16 +3,20 @@ package internal
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
+	"time"
 
+	"github.com/fasthttp/websocket"
 	"github.com/valyala/fasthttp"
 
 	"apron.network/gateway/internal/models"
 )
 
 var (
-	SERVICE_URI_STR = "http://localhost:2345/anything"
+	RestServiceUrlStr = "http://localhost:2345/anything"
+	WsServiceUrlStr = "wss://stream.binance.com:9443/ws/bnbbtc@depth"
 )
 
 type ProxyHandler struct {
@@ -29,20 +33,48 @@ func (h *ProxyHandler) ForwardHandler(ctx *fasthttp.RequestCtx) {
 
 	requestDetail, _ := ExtractCtxRequestDetail(ctx)
 
-	if requestDetail.IsWebsocket {
+	if websocket.FastHTTPIsWebSocketUpgrade(ctx) {
 		h.forwardWebsocketRequest(ctx, &requestDetail)
 	} else {
 		h.forwardHttpRequest(ctx, &requestDetail)
 	}
 }
 func (h *ProxyHandler) forwardWebsocketRequest(ctx *fasthttp.RequestCtx, requestDetail *RequestDetail) {
-	ctx.SetStatusCode(fasthttp.StatusInternalServerError)
-	ctx.WriteString("websocket support is under development")
+	upgrader := websocket.FastHTTPUpgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+	}
+
+	upgrader.Upgrade(ctx, func(ws *websocket.Conn) {
+		serviceUrl, _ := url.Parse(WsServiceUrlStr)
+		fmt.Printf("Service url: %+v\n", serviceUrl)
+
+		dialer := websocket.Dialer{
+			HandshakeTimeout: 15 * time.Second,
+		}
+
+		// TODO: Check whether header information are required for service ws
+		serviceConnection, _, err := dialer.Dial(serviceUrl.String(), nil)
+		CheckError(err)
+
+		for {
+			messageType, p, err := serviceConnection.ReadMessage()
+			if err != nil {
+				log.Println(err)
+				return
+			}
+
+			if err := ws.WriteMessage(messageType, p); err != nil {
+				log.Println(err)
+				return
+			}
+		}
+	})
 }
 
 func (h *ProxyHandler) forwardHttpRequest(ctx *fasthttp.RequestCtx, requestDetail *RequestDetail) {
 	// Build URI, the forward URL is local httpbin URL
-	serviceUrl, _ := url.Parse(SERVICE_URI_STR)
+	serviceUrl, _ := url.Parse(RestServiceUrlStr)
 	if bytes.Compare(requestDetail.Path, []byte("/")) != 0 {
 		// TODO: Check whether need to replace with fasthttp client for better performance
 		serviceUrl.Path += string(requestDetail.Path)
