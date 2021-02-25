@@ -7,7 +7,7 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-// TODO: Add database client to fetch regisited service and api keys
+// TODO: Add database client to fetch registered service and api keys
 type UserHandler struct {
 	r *router.Router
 }
@@ -36,6 +36,11 @@ func (h *UserHandler) InitRouters() {
 	apiKeyRouter.POST("/{service_id}", h.apiKeyDetailHandler)
 	apiKeyRouter.PUT("/{service_id}", h.updateApiKeyHandler)
 	apiKeyRouter.DELETE("/{service_id}", h.deleteApiKeyHandler)
+
+	// User mgmt related
+	userRouter := h.r.Group("/users")
+	userRouter.GET("/", h.userProfileHandler)
+	userRouter.PUT("/", h.updateUserProfileHandler)
 }
 
 func (h *UserHandler) indexHandler(ctx *fasthttp.RequestCtx) {
@@ -73,3 +78,6 @@ func (h *UserHandler) updateApiKeyHandler(ctx *fasthttp.RequestCtx) {
 func (h *UserHandler) deleteApiKeyHandler(ctx *fasthttp.RequestCtx) {
 
 }
+
+func (h *UserHandler) userProfileHandler(ctx *fasthttp.RequestCtx) {}
+func (h *UserHandler) updateUserProfileHandler(ctx *fasthttp.RequestCtx) {}
