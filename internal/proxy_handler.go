@@ -76,7 +76,6 @@ func (h *ProxyHandler) forwardHttpRequest(ctx *fasthttp.RequestCtx, requestDetai
 	// Build URI, the forward URL is local httpbin URL
 	serviceUrl, _ := url.Parse(RestServiceUrlStr)
 	if bytes.Compare(requestDetail.Path, []byte("/")) != 0 {
-		// TODO: Check whether need to replace with fasthttp client for better performance
 		serviceUrl.Path += string(requestDetail.Path)
 	}
 
@@ -91,38 +90,35 @@ func (h *ProxyHandler) forwardHttpRequest(ctx *fasthttp.RequestCtx, requestDetai
 	fmt.Printf("host: %+v, path: %+v, queries: %+v\n", serviceUrl.Host, serviceUrl.Path, serviceUrl.RawQuery)
 
 	// Build request, query params are included in URI
-	req, _ := http.NewRequest(requestDetail.Method, serviceUrl.String(), bytes.NewBuffer([]byte(requestDetail.RequestBody)))
+	proxyReq := fasthttp.AcquireRequest()
+	proxyResp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseRequest(proxyReq)
+	defer fasthttp.ReleaseResponse(proxyResp)
 
-	// Fill header data
-	for k, values := range requestDetail.Headers {
-		for _, v := range values {
-			req.Header.Set(string(k), string(v))
-		}
-
-	}
-
-	proxyResponse, err := h.HttpClient.Do(req)
-
-	if err != nil {
+	proxyReq.SetRequestURI(serviceUrl.String())
+	ctx.Request.Header.VisitAll(func(k, v []byte) {
+		proxyReq.Header.SetCanonical(k, v)
+	})
+	proxyReq.Header.SetMethod(requestDetail.Method)
+	proxyReq.SetBodyString(requestDetail.RequestBody)
+	if err := fasthttp.Do(proxyReq, proxyResp); err != nil {
 		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
-		ctx.Write([]byte(err.Error()))
+		ctx.WriteString(err.Error())
 		return
 	}
 
-	ctx.SetStatusCode(proxyResponse.StatusCode)
-	fmt.Printf("Proxy response header: %+v\n", proxyResponse.Header)
+	respBody := proxyResp.Body()
+
+	ctx.SetStatusCode(proxyResp.StatusCode())
 
 	// TODO: Only set fields should be visible for client
-	for k, values := range proxyResponse.Header {
-		for _, v := range values {
-			fmt.Printf("proxy Resp header: %s\n", k)
-			ctx.Response.Header.Set(k, v)
-		}
-	}
+	proxyResp.Header.VisitAll(func(k, v []byte) {
+		ctx.Response.Header.SetCanonical(k, v)
+	})
 
 	// TODO: Check cookies
 
-	ctx.SetBodyStream(proxyResponse.Body, int(proxyResponse.ContentLength))
+	ctx.SetBody(respBody)
 }
 
 // TODO: Validator related, perhaps can move to a new middleware
