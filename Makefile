@@ -2,9 +2,12 @@ all: gen build
 
 build: gw
 
+SOURCES = $(wildcard internal/*/*.go internal/*.go cmd/*/*.go)
+
+
 gen:
 
-gw: cmd/gw/main.go
+gw: $(SOURCES)
 	go build ./cmd/gw
 
 test:
