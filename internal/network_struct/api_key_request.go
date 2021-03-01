@@ -8,13 +8,6 @@ type NewApiKeyRequest struct {
 
 type ListApiKeysRequest struct {
 	ServiceId string
-	Start int
-	Count int
-}
-
-type ListApiKeysResponse struct {
-	ServiceId string
-	Records []models.ApronApiKey
-	Count uint
-	NextCursor uint64
+	Start     int
+	Count     int
 }
