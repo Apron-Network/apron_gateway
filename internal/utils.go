@@ -30,13 +30,13 @@ func ExtractQueryIntValue(ctx *fasthttp.RequestCtx, argName string, defaultValue
 }
 
 func ParseHscanResultToObjectMap(rcds []string) (map[string]string, uint, error) {
-	if len(rcds) % 2 != 0 {
+	if len(rcds)%2 != 0 {
 		return nil, 0, errors.New("record length should be even number")
 	}
 
 	resultCount := uint(len(rcds) / 2)
 	rslt := make(map[string]string)
-	for idx := 0; idx <len(rcds); idx+=2 {
+	for idx := 0; idx < len(rcds); idx += 2 {
 		rslt[rcds[idx]] = rcds[idx+1]
 	}
 
