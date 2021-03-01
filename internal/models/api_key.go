@@ -1,6 +1,6 @@
 package models
 
-type ApiKey struct {
-	ApiKey string
-	Service Service
+func (k *ApronApiKey) StoreBucketName() string {
+	return ServiceApiKeyStorageBucketName(k.ServiceId)
 }
+

@@ -1,6 +1,7 @@
 package models
 
-type Service struct {
-	name string
-	base string
+import "fmt"
+
+func ServiceApiKeyStorageBucketName(service_id string) string {
+	return fmt.Sprint("ApiKeyBucket:%s", service_id)
 }
