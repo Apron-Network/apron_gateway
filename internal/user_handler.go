@@ -2,13 +2,23 @@ package internal
 
 import (
 	"fmt"
+	"time"
+
+	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/proto"
+
+	"apron.network/gateway/internal/models"
+	"apron.network/gateway/internal/network_struct"
 
 	"github.com/fasthttp/router"
+	"github.com/go-redis/redis/v8"
+	"github.com/google/uuid"
 	"github.com/valyala/fasthttp"
 )
 
 // TODO: Add database client to fetch registered service and api keys
 type UserHandler struct {
+	RedisClient *redis.Client
 	r *router.Router
 }
 
@@ -29,13 +39,14 @@ func (h *UserHandler) InitRouters() {
 	serviceRouter.PUT("/{service_id}", h.updateServiceHandler)
 	serviceRouter.DELETE("/{service_id}", h.deleteServiceHandler)
 
+
 	// API key related
-	apiKeyRouter := h.r.Group("/keys")
+	apiKeyRouter :=serviceRouter.Group("/{service_id}/keys")
 	apiKeyRouter.GET("/", h.listApiKeysHandler)
 	apiKeyRouter.POST("/", h.newApiKeyHandler)
-	apiKeyRouter.POST("/{service_id}", h.apiKeyDetailHandler)
-	apiKeyRouter.PUT("/{service_id}", h.updateApiKeyHandler)
-	apiKeyRouter.DELETE("/{service_id}", h.deleteApiKeyHandler)
+	apiKeyRouter.GET("/{key_id}", h.apiKeyDetailHandler)
+	apiKeyRouter.PUT("/{key_id}", h.updateApiKeyHandler)
+	apiKeyRouter.DELETE("/{key_id}", h.deleteApiKeyHandler)
 
 	// User mgmt related
 	userRouter := h.r.Group("/users")
@@ -65,9 +76,39 @@ func (h *UserHandler) deleteServiceHandler(ctx *fasthttp.RequestCtx) {
 }
 
 func (h *UserHandler) listApiKeysHandler(ctx *fasthttp.RequestCtx) {
+	// Parse service data from request body
+	listApiKeysRequest := network_struct.ListApiKeysRequest{
+		ServiceId: ctx.UserValue("service_id").(string),
+	}
+
+	rcds, err := h.RedisClient.HGetAll(Ctx(), models.ServiceApiKeyStorageBucketName(listApiKeysRequest.ServiceId)).Result()
+	CheckError(err)
+
+	fmt.Printf("%+v\n", rcds)
 }
 func (h *UserHandler) newApiKeyHandler(ctx *fasthttp.RequestCtx) {
+	// Parse service data from request body
+	newApiRequest := network_struct.NewApiKeyRequest{
+		ServiceId: ctx.UserValue("service_id").(string),
+	}
 
+	newApiKeyMessage := models.ApronApiKey{
+		Name: uuid.NewString(),
+		Val: uuid.NewString(),
+		ServiceId: newApiRequest.ServiceId,
+		IssuedAt: time.Now().Unix(),
+	}
+
+	binaryNewApiKey, err := proto.Marshal(&newApiKeyMessage)
+	CheckError(err)
+
+	_, err = h.RedisClient.HSet(Ctx(), newApiKeyMessage.StoreBucketName(), newApiKeyMessage.Val, binaryNewApiKey).Result()
+	CheckError(err)
+
+	m := jsonpb.Marshaler{}
+
+	respBody, _ := m.MarshalToString(&newApiKeyMessage)
+	ctx.WriteString(respBody)
 }
 func (h *UserHandler) apiKeyDetailHandler(ctx *fasthttp.RequestCtx) {
 

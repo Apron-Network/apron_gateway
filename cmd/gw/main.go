@@ -8,11 +8,15 @@ import (
 
 	"github.com/valyala/fasthttp"
 
+	"github.com/go-redis/redis/v8"
+
 	"apron.network/gateway/internal"
 )
 
-func startAdminService(addr string, wg *sync.WaitGroup) {
-	h := internal.UserHandler{}
+func startAdminService(addr string, wg *sync.WaitGroup, redisClient *redis.Client) {
+	h := internal.UserHandler{
+		RedisClient: redisClient,
+	}
 	h.InitRouters()
 
 	if err := fasthttp.ListenAndServe(addr, h.Handler()); err != nil {
@@ -22,7 +26,7 @@ func startAdminService(addr string, wg *sync.WaitGroup) {
 	wg.Done()
 }
 
-func startProxyService(addr string, wg *sync.WaitGroup) {
+func startProxyService(addr string, wg *sync.WaitGroup, redisClient *redis.Client) {
 	// TODO: Load from configurations
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.MaxIdleConns = 100
@@ -32,7 +36,8 @@ func startProxyService(addr string, wg *sync.WaitGroup) {
 	h := internal.ProxyHandler{HttpClient: &http.Client{
 		Timeout:   10 * time.Second,
 		Transport: t,
-	}}
+	},
+		RedisClient: redisClient}
 
 	if err := fasthttp.ListenAndServe(addr, h.ForwardHandler); err != nil {
 		log.Fatalf("Error in Proxy service: %s", err)
@@ -47,8 +52,14 @@ func main() {
 	wg := new(sync.WaitGroup)
 	wg.Add(2)
 
-	go startProxyService(":8080", wg)
-	go startAdminService("127.0.0.1:8082", wg)
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+
+	go startProxyService(":8080", wg, rdb)
+	go startAdminService("127.0.0.1:8082", wg, rdb)
 
 	wg.Wait()
 }
