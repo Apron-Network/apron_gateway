@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/valyala/fasthttp"
 )
@@ -40,4 +41,8 @@ func ParseHscanResultToObjectMap(rcds []string) (map[string]string, uint, error)
 	}
 
 	return rslt, resultCount, nil
+}
+
+func ServiceApiKeyStorageBucketName(service_id string) string {
+	return fmt.Sprintf("ApiKeyBucket:%s", service_id)
 }
