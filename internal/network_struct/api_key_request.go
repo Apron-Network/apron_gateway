@@ -11,3 +11,10 @@ type ListApiKeysRequest struct {
 	Start     int
 	Count     int
 }
+
+type ListApiKeysResponse struct {
+	ServiceId string
+	Records []models.ApronApiKey
+	Count uint
+	NextCursor uint64
+}
