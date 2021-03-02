@@ -84,15 +84,14 @@ func (h *UserHandler) listApiKeysHandler(ctx *fasthttp.RequestCtx) {
 		Count:     ExtractQueryIntValue(ctx, "count", 10),
 	}
 
-	// Parse args in query to build redis hscan command
-	count := ExtractQueryIntValue(ctx, "count", 10)
-	start := ExtractQueryIntValue(ctx, "start", 10)
-
+	// Invoke hscan command to fetch keys
+	// Note: Using hscan instead of hgetall here is to avoid performance loss of redis
+	fmt.Printf("%+v\n", listApiKeysRequest)
 	rcds, cursor, err := h.RedisClient.HScan(Ctx(),
 		models.ServiceApiKeyStorageBucketName(listApiKeysRequest.ServiceId),
-		uint64(start),
+		uint64(listApiKeysRequest.Start),
 		"",
-		int64(count)).Result()
+		int64(listApiKeysRequest.Count)).Result()
 	CheckError(err)
 
 	// Rebuilt hscan result to map[string]string
