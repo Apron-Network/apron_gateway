@@ -88,7 +88,7 @@ func (h *UserHandler) listApiKeysHandler(ctx *fasthttp.RequestCtx) {
 	// Note: Using hscan instead of hgetall here is to avoid performance loss of redis
 	fmt.Printf("%+v\n", listApiKeysRequest)
 	rcds, cursor, err := h.RedisClient.HScan(Ctx(),
-		models.ServiceApiKeyStorageBucketName(listApiKeysRequest.ServiceId),
+		ServiceApiKeyStorageBucketName(listApiKeysRequest.ServiceId),
 		uint64(listApiKeysRequest.Start),
 		"",
 		int64(listApiKeysRequest.Count)).Result()
@@ -123,24 +123,21 @@ func (h *UserHandler) listApiKeysHandler(ctx *fasthttp.RequestCtx) {
 }
 
 func (h *UserHandler) newApiKeyHandler(ctx *fasthttp.RequestCtx) {
-	// Parse service data from request body
-	newApiRequest := network_struct.NewApiKeyRequest{
-		ServiceId: ctx.UserValue("service_id").(string),
-	}
-	CheckError(err)
-
 	// Build key object and save to redis
 	newApiKeyMessage := models.ApronApiKey{
 		Name:      uuid.NewString(),
 		Key:       uuid.NewString(),
-		ServiceId: newApiRequest.ServiceId,
+		ServiceId: ctx.UserValue("service_id").(string),
 		IssuedAt:  time.Now().Unix(),
 	}
 
 	binaryNewApiKey, err := proto.Marshal(&newApiKeyMessage)
 	CheckError(err)
 
-	_, err = h.RedisClient.HSet(Ctx(), newApiKeyMessage.StoreBucketName(), newApiKeyMessage.Key, binaryNewApiKey).Result()
+	_, err = h.RedisClient.HSet(Ctx(),
+		ServiceApiKeyStorageBucketName(newApiKeyMessage.ServiceId),
+		newApiKeyMessage.Key,
+		binaryNewApiKey).Result()
 	CheckError(err)
 
 	// Build response
