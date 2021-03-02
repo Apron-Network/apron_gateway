@@ -169,10 +169,22 @@ func (h *UserHandler) apiKeyDetailHandler(ctx *fasthttp.RequestCtx) {
 	}
 }
 func (h *UserHandler) updateApiKeyHandler(ctx *fasthttp.RequestCtx) {
-
+	ctx.SetStatusCode(fasthttp.StatusNotImplemented)
 }
 func (h *UserHandler) deleteApiKeyHandler(ctx *fasthttp.RequestCtx) {
+	serviceId := ctx.UserValue("service_id").(string)
+	key := ctx.UserValue("key_id").(string)
+	storageBucketName := ServiceApiKeyStorageBucketName(serviceId)
 
+	existing, err := h.RedisClient.HExists(Ctx(), storageBucketName, key).Result()
+	CheckError(err)
+	if existing {
+		_, err := h.RedisClient.HDel(Ctx(), storageBucketName, key).Result()
+		CheckError(err)
+		ctx.SetStatusCode(fasthttp.StatusOK)
+	} else {
+		ctx.SetStatusCode(fasthttp.StatusNotFound)
+	}
 }
 
 func (h *UserHandler) userProfileHandler(ctx *fasthttp.RequestCtx)       {}
