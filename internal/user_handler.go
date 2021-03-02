@@ -86,7 +86,6 @@ func (h *UserHandler) listApiKeysHandler(ctx *fasthttp.RequestCtx) {
 
 	// Invoke hscan command to fetch keys
 	// Note: Using hscan instead of hgetall here is to avoid performance loss of redis
-	fmt.Printf("%+v\n", listApiKeysRequest)
 	rcds, cursor, err := h.RedisClient.HScan(Ctx(),
 		ServiceApiKeyStorageBucketName(listApiKeysRequest.ServiceId),
 		uint64(listApiKeysRequest.Start),
