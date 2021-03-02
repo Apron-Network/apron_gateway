@@ -80,17 +80,18 @@ func (h *UserHandler) listApiKeysHandler(ctx *fasthttp.RequestCtx) {
 	// Parse service data from request body
 	listApiKeysRequest := network_struct.ListApiKeysRequest{
 		ServiceId: ctx.UserValue("service_id").(string),
+		Start:     ExtractQueryIntValue(ctx, "start", 0),
+		Count:     ExtractQueryIntValue(ctx, "count", 10),
 	}
 
-	// Parse args in query to build redis hscan command
-	count := ExtractQueryIntValue(ctx, "count", 10)
-	start := ExtractQueryIntValue(ctx, "start", 10)
-
+	// Invoke hscan command to fetch keys
+	// Note: Using hscan instead of hgetall here is to avoid performance loss of redis
+	fmt.Printf("%+v\n", listApiKeysRequest)
 	rcds, cursor, err := h.RedisClient.HScan(Ctx(),
 		models.ServiceApiKeyStorageBucketName(listApiKeysRequest.ServiceId),
-		uint64(start),
+		uint64(listApiKeysRequest.Start),
 		"",
-		int64(count)).Result()
+		int64(listApiKeysRequest.Count)).Result()
 	CheckError(err)
 
 	// Rebuilt hscan result to map[string]string
@@ -147,7 +148,27 @@ func (h *UserHandler) newApiKeyHandler(ctx *fasthttp.RequestCtx) {
 	ctx.WriteString(respBody)
 }
 func (h *UserHandler) apiKeyDetailHandler(ctx *fasthttp.RequestCtx) {
+	serviceId := ctx.UserValue("service_id").(string)
+	key := ctx.UserValue("key_id").(string)
+	storageBucketName := models.ServiceApiKeyStorageBucketName(serviceId)
 
+	existing, err := h.RedisClient.HExists(Ctx(), storageBucketName, key).Result()
+	CheckError(err)
+	if existing {
+		binaryKeyData, err := h.RedisClient.HGet(Ctx(), storageBucketName, key).Result()
+		CheckError(err)
+
+		keyDetail := models.ApronApiKey{}
+		err = proto.Unmarshal([]byte(binaryKeyData), &keyDetail)
+		CheckError(err)
+
+		// Build response
+		m := jsonpb.Marshaler{}
+		respBody, _ := m.MarshalToString(&keyDetail)
+		ctx.WriteString(respBody)
+	} else {
+		ctx.SetStatusCode(fasthttp.StatusNotFound)
+	}
 }
 func (h *UserHandler) updateApiKeyHandler(ctx *fasthttp.RequestCtx) {
 
