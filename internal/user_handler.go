@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -19,7 +20,7 @@ import (
 // TODO: Add database client to fetch registered service and api keys
 type UserHandler struct {
 	RedisClient *redis.Client
-	r *router.Router
+	r           *router.Router
 }
 
 func (h *UserHandler) Handler() func(ctx *fasthttp.RequestCtx) {
@@ -39,9 +40,8 @@ func (h *UserHandler) InitRouters() {
 	serviceRouter.PUT("/{service_id}", h.updateServiceHandler)
 	serviceRouter.DELETE("/{service_id}", h.deleteServiceHandler)
 
-
 	// API key related
-	apiKeyRouter :=serviceRouter.Group("/{service_id}/keys")
+	apiKeyRouter := serviceRouter.Group("/{service_id}/keys")
 	apiKeyRouter.GET("/", h.listApiKeysHandler)
 	apiKeyRouter.POST("/", h.newApiKeyHandler)
 	apiKeyRouter.GET("/{key_id}", h.apiKeyDetailHandler)
@@ -75,38 +75,74 @@ func (h *UserHandler) deleteServiceHandler(ctx *fasthttp.RequestCtx) {
 	fmt.Fprintf(ctx, "Delete Service")
 }
 
+//listApiKeysHandler loads specified size keys from service api key hash bucket and return
 func (h *UserHandler) listApiKeysHandler(ctx *fasthttp.RequestCtx) {
 	// Parse service data from request body
 	listApiKeysRequest := network_struct.ListApiKeysRequest{
 		ServiceId: ctx.UserValue("service_id").(string),
 	}
 
-	rcds, err := h.RedisClient.HGetAll(Ctx(), models.ServiceApiKeyStorageBucketName(listApiKeysRequest.ServiceId)).Result()
+	// Parse args in query to build redis hscan command
+	count := ExtractQueryIntValue(ctx, "count", 10)
+	start := ExtractQueryIntValue(ctx, "start", 10)
+
+	rcds, cursor, err := h.RedisClient.HScan(Ctx(),
+		models.ServiceApiKeyStorageBucketName(listApiKeysRequest.ServiceId),
+		uint64(start),
+		"",
+		int64(count)).Result()
 	CheckError(err)
 
-	fmt.Printf("%+v\n", rcds)
+	// Rebuilt hscan result to map[string]string
+	scanResultMap, resultCount, err := ParseHscanResultToObjectMap(rcds)
+	CheckError(err)
+
+	// Build response
+	rslt := make([]models.ApronApiKey, resultCount)
+	idx := 0
+	for _, v := range scanResultMap {
+		tmpRcd := models.ApronApiKey{}
+		err := proto.Unmarshal([]byte(v), &tmpRcd)
+		CheckError(err)
+		rslt[idx] = tmpRcd
+		idx++
+	}
+	CheckError(err)
+
+	resp := network_struct.ListApiKeysResponse{
+		ServiceId:  listApiKeysRequest.ServiceId,
+		Records:    rslt,
+		Count:      resultCount,
+		NextCursor: cursor,
+	}
+
+	respBody, err := json.Marshal(resp)
+	CheckError(err)
+	ctx.Write(respBody)
 }
+
 func (h *UserHandler) newApiKeyHandler(ctx *fasthttp.RequestCtx) {
 	// Parse service data from request body
 	newApiRequest := network_struct.NewApiKeyRequest{
 		ServiceId: ctx.UserValue("service_id").(string),
 	}
 
+	// Build key object and save to redis
 	newApiKeyMessage := models.ApronApiKey{
-		Name: uuid.NewString(),
-		Val: uuid.NewString(),
+		Name:      uuid.NewString(),
+		Key:       uuid.NewString(),
 		ServiceId: newApiRequest.ServiceId,
-		IssuedAt: time.Now().Unix(),
+		IssuedAt:  time.Now().Unix(),
 	}
 
 	binaryNewApiKey, err := proto.Marshal(&newApiKeyMessage)
 	CheckError(err)
 
-	_, err = h.RedisClient.HSet(Ctx(), newApiKeyMessage.StoreBucketName(), newApiKeyMessage.Val, binaryNewApiKey).Result()
+	_, err = h.RedisClient.HSet(Ctx(), newApiKeyMessage.StoreBucketName(), newApiKeyMessage.Key, binaryNewApiKey).Result()
 	CheckError(err)
 
+	// Build response
 	m := jsonpb.Marshaler{}
-
 	respBody, _ := m.MarshalToString(&newApiKeyMessage)
 	ctx.WriteString(respBody)
 }
@@ -120,5 +156,5 @@ func (h *UserHandler) deleteApiKeyHandler(ctx *fasthttp.RequestCtx) {
 
 }
 
-func (h *UserHandler) userProfileHandler(ctx *fasthttp.RequestCtx) {}
+func (h *UserHandler) userProfileHandler(ctx *fasthttp.RequestCtx)       {}
 func (h *UserHandler) updateUserProfileHandler(ctx *fasthttp.RequestCtx) {}
