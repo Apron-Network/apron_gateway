@@ -10,14 +10,18 @@ import (
 
 	"github.com/go-redis/redis/v8"
 
-	"apron.network/gateway/internal"
+	"apron.network/gateway/internal/handlers"
+	"apron.network/gateway/internal/models"
 	"apron.network/gateway/ratelimiter"
 )
 
+const ApronApiKeyFieldName = "apron-api-key"
+
 func startAdminService(addr string, wg *sync.WaitGroup, redisClient *redis.Client) {
-	h := internal.UserHandler{
+	h := handlers.ManagerHandler{}
+	h.InitStore(&models.StorageManager{
 		RedisClient: redisClient,
-	}
+	})
 	h.InitRouters()
 
 	if err := fasthttp.ListenAndServe(addr, h.Handler()); err != nil {
@@ -34,13 +38,14 @@ func startProxyService(addr string, wg *sync.WaitGroup, redisClient *redis.Clien
 	t.MaxConnsPerHost = 100
 	t.MaxIdleConnsPerHost = 100
 
-	h := internal.ProxyHandler{
+	h := handlers.ProxyHandler{
 		HttpClient: &http.Client{
 			Timeout:   10 * time.Second,
 			Transport: t,
 		},
-
-		RedisClient: redisClient,
+		StorageManager: &models.StorageManager{
+			RedisClient: redisClient,
+		},
 
 		RateLimiter: ratelimiter.New(ratelimiter.Options{
 			Max:      60,
