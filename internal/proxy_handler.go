@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/fasthttp/websocket"
+	"github.com/go-redis/redis/v8"
 	"github.com/valyala/fasthttp"
 
 	"apron.network/gateway/internal/models"
@@ -21,6 +22,7 @@ var (
 
 type ProxyHandler struct {
 	HttpClient *http.Client
+	RedisClient *redis.Client
 }
 
 // ForwardHandler receives request and forward to configured services, which contains those actions
@@ -144,11 +146,11 @@ func (h *ProxyHandler) identifyUser(ctx *fasthttp.RequestCtx) (models.User, erro
 	return models.User{}, nil
 }
 
-func (h *ProxyHandler) identifyService(ctx *fasthttp.RequestCtx) (models.Service, error) {
+func (h *ProxyHandler) identifyService(ctx *fasthttp.RequestCtx) (models.ApronService, error) {
 	// Scaffold code
-	return models.Service{}, nil
+	return models.ApronService{}, nil
 }
 
-func (h *ProxyHandler) canUserAccessService(user *models.User, service *models.Service) bool {
+func (h *ProxyHandler) canUserAccessService(user *models.User, service *models.ApronService) bool {
 	return true
 }
