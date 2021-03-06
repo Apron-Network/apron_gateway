@@ -42,9 +42,8 @@ func startProxyService(addr string, wg *sync.WaitGroup, redisClient *redis.Clien
 
 		RedisClient: redisClient,
 
-		// limit to 1000 requests in 1 minute.
 		RateLimiter: ratelimiter.New(ratelimiter.Options{
-			Max:      10,
+			Max:      60,
 			Duration: time.Minute,
 		}),
 	}

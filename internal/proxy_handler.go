@@ -32,7 +32,8 @@ type ProxyHandler struct {
 func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
 	h.validateRequest(ctx)
 
-	res, err := h.RateLimiter.Get(string(ctx.Path()))
+	key := string(ctx.Path()) // TODO: need process path before handle rate limit
+	res, err := h.RateLimiter.Get(key)
 	if err != nil {
 		return
 	}
@@ -41,7 +42,7 @@ func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
 	fmt.Printf("X-Ratelimit-Remaining: %s\n", strconv.FormatInt(int64(res.Remaining), 10))
 	fmt.Printf("X-Ratelimit-Reset: %s\n", strconv.FormatInt(res.Reset.Unix(), 10))
 
-	//TODO: handle the case of no remain resource left, the key point is how to notify clients
+	//TODO: handle the case of no remain resource left, the key point is how to notify clients in response
 	if res.Remaining < 0 {
 		after := int64(res.Reset.Sub(time.Now())) / 1e9
 		fmt.Printf("Retry-After: %s\n", strconv.FormatInt(after, 10))
