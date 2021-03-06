@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/fasthttp/websocket"
@@ -13,6 +14,7 @@ import (
 	"github.com/valyala/fasthttp"
 
 	"apron.network/gateway/internal/models"
+	"apron.network/gateway/ratelimiter"
 )
 
 var (
@@ -21,8 +23,32 @@ var (
 )
 
 type ProxyHandler struct {
-	HttpClient *http.Client
+	HttpClient  *http.Client
 	RedisClient *redis.Client
+	RateLimiter *ratelimiter.Limiter
+}
+
+// InternalHandler ...
+func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
+	h.validateRequest(ctx)
+
+	res, err := h.RateLimiter.Get(string(ctx.Path()))
+	if err != nil {
+		return
+	}
+
+	fmt.Printf("X-Ratelimit-Limit: %s\n", strconv.FormatInt(int64(res.Total), 10))
+	fmt.Printf("X-Ratelimit-Remaining: %s\n", strconv.FormatInt(int64(res.Remaining), 10))
+	fmt.Printf("X-Ratelimit-Reset: %s\n", strconv.FormatInt(res.Reset.Unix(), 10))
+
+	//TODO: handle the case of no remain resource left, the key point is how to notify clients
+	if res.Remaining < 0 {
+		after := int64(res.Reset.Sub(time.Now())) / 1e9
+		fmt.Printf("Retry-After: %s\n", strconv.FormatInt(after, 10))
+		return
+	}
+
+	h.ForwardHandler(ctx)
 }
 
 // ForwardHandler receives request and forward to configured services, which contains those actions
@@ -41,6 +67,7 @@ func (h *ProxyHandler) ForwardHandler(ctx *fasthttp.RequestCtx) {
 		h.forwardHttpRequest(ctx, &requestDetail)
 	}
 }
+
 func (h *ProxyHandler) forwardWebsocketRequest(ctx *fasthttp.RequestCtx, requestDetail *RequestDetail) {
 	upgrader := websocket.FastHTTPUpgrader{
 		ReadBufferSize:  1024,

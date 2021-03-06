@@ -11,6 +11,7 @@ import (
 	"github.com/go-redis/redis/v8"
 
 	"apron.network/gateway/internal"
+	"apron.network/gateway/ratelimiter"
 )
 
 func startAdminService(addr string, wg *sync.WaitGroup, redisClient *redis.Client) {
@@ -33,13 +34,22 @@ func startProxyService(addr string, wg *sync.WaitGroup, redisClient *redis.Clien
 	t.MaxConnsPerHost = 100
 	t.MaxIdleConnsPerHost = 100
 
-	h := internal.ProxyHandler{HttpClient: &http.Client{
-		Timeout:   10 * time.Second,
-		Transport: t,
-	},
-		RedisClient: redisClient}
+	h := internal.ProxyHandler{
+		HttpClient: &http.Client{
+			Timeout:   10 * time.Second,
+			Transport: t,
+		},
 
-	if err := fasthttp.ListenAndServe(addr, h.ForwardHandler); err != nil {
+		RedisClient: redisClient,
+
+		// limit to 1000 requests in 1 minute.
+		RateLimiter: ratelimiter.New(ratelimiter.Options{
+			Max:      10,
+			Duration: time.Minute,
+		}),
+	}
+
+	if err := fasthttp.ListenAndServe(addr, h.InternalHandler); err != nil {
 		log.Fatalf("Error in Proxy service: %s", err)
 		wg.Done()
 	}
