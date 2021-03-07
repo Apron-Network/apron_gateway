@@ -2,8 +2,6 @@ package main
 
 import (
 	"apron.network/gateway/internal"
-	"encoding/json"
-	"go.uber.org/zap"
 	"log"
 	"net/http"
 	"sync"
@@ -39,25 +37,10 @@ func startProxyService(addr string, wg *sync.WaitGroup, redisClient *redis.Clien
 	t.MaxConnsPerHost = 100
 	t.MaxIdleConnsPerHost = 100
 
-	zapConfigByte := []byte(`{
-	  "level": "info",
-	  "encoding": "json",
-	  "outputPaths": ["stdout", "logs/proxy.log"],
-	  "errorOutputPaths": ["stderr"],
-	  "encoderConfig": {
-	    "messageKey": "message",
-	    "levelKey": "level",
-	    "levelEncoder": "lowercase"
-	  }
-	}`)
-
-	var zapCfg zap.Config
-	err := json.Unmarshal(zapConfigByte, &zapCfg)
-	internal.CheckError(err)
-
-	proxyLogger, err := zapCfg.Build()
-	internal.CheckError(err)
-	defer proxyLogger.Sync()
+	proxyLogger := internal.GatewayLogger{
+		LogFile: "logs/proxy_log.txt",
+	}
+	proxyLogger.Init()
 
 	h := handlers.ProxyHandler{
 		HttpClient: &http.Client{
@@ -71,7 +54,7 @@ func startProxyService(addr string, wg *sync.WaitGroup, redisClient *redis.Clien
 			Max:      60,
 			Duration: time.Minute,
 		}),
-		Logger: proxyLogger,
+		Logger: &proxyLogger,
 	}
 
 	if err := fasthttp.ListenAndServe(addr, h.InternalHandler); err != nil {

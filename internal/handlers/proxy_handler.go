@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"go.uber.org/zap"
 	"log"
 	"net/http"
 	"net/url"
@@ -24,7 +23,7 @@ type ProxyHandler struct {
 	HttpClient     *http.Client
 	StorageManager *models.StorageManager
 	RateLimiter    *ratelimiter.Limiter
-	Logger         *zap.Logger
+	Logger         *internal.GatewayLogger
 
 	requestDetail *models.RequestDetail
 }
@@ -42,12 +41,12 @@ func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	h.Logger.Info("request received",
-		zap.String("request_url", requestDetail.URI.String()),
-		zap.String("remote_ip", ctx.RemoteIP().String()),
-		zap.String("service", requestDetail.ServiceNameStr),
-		zap.String("api_key", requestDetail.ApiKeyStr),
-	)
+	h.Logger.RecordMsg(fmt.Sprintf("%s: from %s, service: %s, api_key: %s",
+		requestDetail.URI.String(),
+		ctx.RemoteIP().String(),
+		requestDetail.ServiceNameStr,
+		requestDetail.ApiKeyStr,
+	))
 
 	fmt.Printf("X-Ratelimit-Limit: %s\n", strconv.FormatInt(int64(res.Total), 10))
 	fmt.Printf("X-Ratelimit-Remaining: %s\n", strconv.FormatInt(int64(res.Remaining), 10))
