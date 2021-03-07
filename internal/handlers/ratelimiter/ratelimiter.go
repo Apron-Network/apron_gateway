@@ -2,7 +2,6 @@ package ratelimiter
 
 import (
 	"errors"
-	"strconv"
 	"time"
 )
 
@@ -86,9 +85,4 @@ func (l *Limiter) Get(id string, policy ...int) (Result, error) {
 // Remove remove limiter record for id
 func (l *Limiter) Remove(id string) error {
 	return l.removeLimit(id)
-}
-
-func genTimestamp() string {
-	time := time.Now().UnixNano() / 1e6
-	return strconv.FormatInt(time, 10)
 }

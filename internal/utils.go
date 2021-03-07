@@ -3,6 +3,8 @@ package internal
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/valyala/fasthttp"
 )
@@ -30,6 +32,12 @@ func ExtractQueryIntValue(ctx *fasthttp.RequestCtx, argName string, defaultValue
 
 func ServiceApiKeyStorageBucketName(service_id string) string {
 	return fmt.Sprintf("ApronApiKey:%s", service_id)
+}
+
+// GenTimestamp ...
+func GenTimestamp() string {
+	time := time.Now().UnixNano() / 1e6
+	return strconv.FormatInt(time, 10)
 }
 
 const ServiceBucketName = "ApronService"
