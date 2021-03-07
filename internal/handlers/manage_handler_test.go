@@ -1,4 +1,4 @@
-package internal
+package handlers
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"github.com/valyala/fasthttp/fasthttputil"
 )
 
-var h = &UserHandler{}
+var h = &ManagerHandler{}
 
 func TestMain(m *testing.M) {
 	h.InitRouters()

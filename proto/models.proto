@@ -3,13 +3,18 @@ syntax = "proto3";
 option go_package = "apron.network/gateway/models";
 
 message ApronApiKey {
-  string name = 1;
-  string key = 2;
-  string service_id = 3;
-  int64 issued_at = 4;
-  int64 expired_at = 5;
+  string key = 1;
+  string service_name = 2;
+  int64 issued_at = 3;
+  int64 expired_at = 4;
 }
 
 message ApronService {
   string name = 1;
+  string base_url = 2;
+  string schema = 3;
+}
+
+message ApronUser {
+  string email = 1;
 }

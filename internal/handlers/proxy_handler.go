@@ -1,7 +1,9 @@
-package internal
+package handlers
 
 import (
+	"apron.network/gateway/ratelimiter"
 	"bytes"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,22 +12,19 @@ import (
 	"time"
 
 	"github.com/fasthttp/websocket"
-	"github.com/go-redis/redis/v8"
+	"github.com/golang/protobuf/proto"
 	"github.com/valyala/fasthttp"
 
+	"apron.network/gateway/internal"
 	"apron.network/gateway/internal/models"
-	"apron.network/gateway/ratelimiter"
-)
-
-var (
-	RestServiceUrlStr = "http://localhost:2345/anything"
-	WsServiceUrlStr   = "wss://stream.binance.com:9443/ws/bnbbtc@depth"
 )
 
 type ProxyHandler struct {
-	HttpClient  *http.Client
-	RedisClient *redis.Client
-	RateLimiter *ratelimiter.Limiter
+	HttpClient     *http.Client
+	StorageManager *models.StorageManager
+	RateLimiter    *ratelimiter.Limiter
+
+	requestDetail *models.RequestDetail
 }
 
 // InternalHandler ...
@@ -58,25 +57,36 @@ func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
 // - Find request related service (based on passed in user credentials)
 // - Transparent proxy
 func (h *ProxyHandler) ForwardHandler(ctx *fasthttp.RequestCtx) {
-	h.validateRequest(ctx)
+	requestDetail, err := models.ExtractCtxRequestDetail(ctx)
+	internal.CheckError(err)
+	h.requestDetail = requestDetail
 
-	requestDetail, _ := ExtractCtxRequestDetail(ctx)
+	if err := h.validateRequest(ctx); err != nil {
+		ctx.SetStatusCode(fasthttp.StatusForbidden)
+		ctx.SetBodyString(err.Error())
+		return
+	}
 
-	if websocket.FastHTTPIsWebSocketUpgrade(ctx) {
-		h.forwardWebsocketRequest(ctx, &requestDetail)
+	service := h.loadService(requestDetail.ServiceNameStr)
+
+	if websocket.FastHTTPIsWebSocketUpgrade(ctx) && (service.Schema == "ws" || service.Schema == "wss") {
+		h.forwardWebsocketRequest(ctx, service)
+	} else if service.Schema == "http" || service.Schema == "https" {
+		h.forwardHttpRequest(ctx, service)
 	} else {
-		h.forwardHttpRequest(ctx, &requestDetail)
+		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+		ctx.SetBodyString("regisited service has different schema with request")
 	}
 }
-
-func (h *ProxyHandler) forwardWebsocketRequest(ctx *fasthttp.RequestCtx, requestDetail *RequestDetail) {
+func (h *ProxyHandler) forwardWebsocketRequest(ctx *fasthttp.RequestCtx, service models.ApronService) {
 	upgrader := websocket.FastHTTPUpgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 	}
 
 	upgrader.Upgrade(ctx, func(ws *websocket.Conn) {
-		serviceUrl, _ := url.Parse(WsServiceUrlStr)
+		serviceUrlStr := fmt.Sprintf("%s://%s", service.Schema, service.BaseUrl)
+		serviceUrl, _ := url.Parse(serviceUrlStr)
 		fmt.Printf("Service url: %+v\n", serviceUrl)
 
 		dialer := websocket.Dialer{
@@ -85,7 +95,7 @@ func (h *ProxyHandler) forwardWebsocketRequest(ctx *fasthttp.RequestCtx, request
 
 		// TODO: Check whether header information are required for service ws
 		serviceConnection, _, err := dialer.Dial(serviceUrl.String(), nil)
-		CheckError(err)
+		internal.CheckError(err)
 
 		for {
 			messageType, p, err := serviceConnection.ReadMessage()
@@ -102,22 +112,23 @@ func (h *ProxyHandler) forwardWebsocketRequest(ctx *fasthttp.RequestCtx, request
 	})
 }
 
-func (h *ProxyHandler) forwardHttpRequest(ctx *fasthttp.RequestCtx, requestDetail *RequestDetail) {
+func (h *ProxyHandler) forwardHttpRequest(ctx *fasthttp.RequestCtx, service models.ApronService) {
 	// Build URI, the forward URL is local httpbin URL
-	serviceUrl, _ := url.Parse(RestServiceUrlStr)
-	if bytes.Compare(requestDetail.Path, []byte("/")) != 0 {
-		serviceUrl.Path += string(requestDetail.Path)
+	serviceUrlStr := fmt.Sprintf("%s://%s", service.Schema, service.BaseUrl)
+	serviceUrl, _ := url.Parse(serviceUrlStr)
+	if bytes.Compare(h.requestDetail.Path, []byte("/")) != 0 {
+		serviceUrl.Path += string(h.requestDetail.ProxyRequestPath)
 	}
 
 	query := serviceUrl.Query()
-	for k, values := range requestDetail.QueryParams {
+	for k, values := range h.requestDetail.QueryParams {
 		for _, v := range values {
 			query.Add(k, v)
 		}
 	}
 	serviceUrl.RawQuery = query.Encode()
 
-	fmt.Printf("host: %+v, path: %+v, queries: %+v\n", serviceUrl.Host, serviceUrl.Path, serviceUrl.RawQuery)
+	// fmt.Printf("host: %+v, path: %+v, queries: %+v\n", serviceUrl.Host, serviceUrl.Path, serviceUrl.RawQuery)
 
 	// Build request, query params are included in URI
 	proxyReq := fasthttp.AcquireRequest()
@@ -129,8 +140,8 @@ func (h *ProxyHandler) forwardHttpRequest(ctx *fasthttp.RequestCtx, requestDetai
 	ctx.Request.Header.VisitAll(func(k, v []byte) {
 		proxyReq.Header.SetCanonical(k, v)
 	})
-	proxyReq.Header.SetMethod(requestDetail.Method)
-	proxyReq.SetBodyString(requestDetail.RequestBody)
+	proxyReq.Header.SetMethod(h.requestDetail.Method)
+	proxyReq.SetBody(h.requestDetail.RequestBody)
 	if err := fasthttp.Do(proxyReq, proxyResp); err != nil {
 		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
 		ctx.WriteString(err.Error())
@@ -146,39 +157,31 @@ func (h *ProxyHandler) forwardHttpRequest(ctx *fasthttp.RequestCtx, requestDetai
 		ctx.Response.Header.SetCanonical(k, v)
 	})
 
-	// TODO: Check cookies
-
 	ctx.SetBody(respBody)
 }
 
 // TODO: Validator related, perhaps can move to a new middleware
 
-//validateRequest checks whether the request can be forwarded to backend services
-func (h *ProxyHandler) validateRequest(ctx *fasthttp.RequestCtx) {
-	user, err := h.identifyUser(ctx)
-	CheckError(err)
-
-	service, err := h.identifyService(ctx)
-	CheckError(err)
-
-	if !h.canUserAccessService(&user, &service) {
-		panic("Not allowed")
+// validateRequest checks whether the request can be forwarded to backend services.
+// It will check whether the key is existing in ApronApiKey:<service_name> bucket/table
+func (h *ProxyHandler) validateRequest(ctx *fasthttp.RequestCtx) error {
+	// Check whether API key and service has related record
+	serviceBucketName := internal.ServiceApiKeyStorageBucketName(h.requestDetail.ServiceNameStr)
+	if h.StorageManager.IsKeyExisting(serviceBucketName) && h.StorageManager.IsKeyExistingInBucket(serviceBucketName, h.requestDetail.ApiKeyStr) {
+		return nil
 	}
+	// Key not found in service bucket, return forbidden
+	ctx.SetStatusCode(fasthttp.StatusForbidden)
+	return errors.New("unauthorized")
 }
 
-func (h *ProxyHandler) identifyUser(ctx *fasthttp.RequestCtx) (models.User, error) {
-	// Parse API key from request
-	// Find user via API key
+func (h *ProxyHandler) loadService(serviceName string) models.ApronService {
+	r, err := h.StorageManager.GetRecord(internal.ServiceBucketName, serviceName)
+	internal.CheckError(err)
 
-	// Scaffold code
-	return models.User{}, nil
-}
+	service := models.ApronService{}
+	err = proto.Unmarshal([]byte(r), &service)
+	internal.CheckError(err)
 
-func (h *ProxyHandler) identifyService(ctx *fasthttp.RequestCtx) (models.ApronService, error) {
-	// Scaffold code
-	return models.ApronService{}, nil
-}
-
-func (h *ProxyHandler) canUserAccessService(user *models.User, service *models.ApronService) bool {
-	return true
+	return service
 }
