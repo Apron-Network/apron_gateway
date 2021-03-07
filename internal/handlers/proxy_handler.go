@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"go.uber.org/zap"
 	"log"
 	"net/http"
 	"net/url"
@@ -23,12 +24,16 @@ type ProxyHandler struct {
 	HttpClient     *http.Client
 	StorageManager *models.StorageManager
 	RateLimiter    *ratelimiter.Limiter
+	Logger         *zap.Logger
 
 	requestDetail *models.RequestDetail
 }
 
 // InternalHandler ...
 func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
+	requestDetail, err := models.ExtractCtxRequestDetail(ctx)
+	internal.CheckError(err)
+	h.requestDetail = requestDetail
 	h.validateRequest(ctx)
 
 	key := string(ctx.Path()) // TODO: need process path before handle rate limit
@@ -36,6 +41,13 @@ func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
 	if err != nil {
 		return
 	}
+
+	h.Logger.Info("request received",
+		zap.String("request_url", requestDetail.URI.String()),
+		zap.String("remote_ip", ctx.RemoteIP().String()),
+		zap.String("service", requestDetail.ServiceNameStr),
+		zap.String("api_key", requestDetail.ApiKeyStr),
+	)
 
 	fmt.Printf("X-Ratelimit-Limit: %s\n", strconv.FormatInt(int64(res.Total), 10))
 	fmt.Printf("X-Ratelimit-Remaining: %s\n", strconv.FormatInt(int64(res.Remaining), 10))
@@ -57,17 +69,13 @@ func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
 // - Find request related service (based on passed in user credentials)
 // - Transparent proxy
 func (h *ProxyHandler) ForwardHandler(ctx *fasthttp.RequestCtx) {
-	requestDetail, err := models.ExtractCtxRequestDetail(ctx)
-	internal.CheckError(err)
-	h.requestDetail = requestDetail
-
 	if err := h.validateRequest(ctx); err != nil {
 		ctx.SetStatusCode(fasthttp.StatusForbidden)
 		ctx.SetBodyString(err.Error())
 		return
 	}
 
-	service := h.loadService(requestDetail.ServiceNameStr)
+	service := h.loadService(h.requestDetail.ServiceNameStr)
 
 	if websocket.FastHTTPIsWebSocketUpgrade(ctx) && (service.Schema == "ws" || service.Schema == "wss") {
 		h.forwardWebsocketRequest(ctx, service)
