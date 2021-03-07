@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"apron.network/gateway/ratelimiter"
 	"bytes"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/fasthttp/websocket"
@@ -20,8 +22,33 @@ import (
 type ProxyHandler struct {
 	HttpClient     *http.Client
 	StorageManager *models.StorageManager
+	RateLimiter    *ratelimiter.Limiter
 
 	requestDetail *models.RequestDetail
+}
+
+// InternalHandler ...
+func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
+	h.validateRequest(ctx)
+
+	key := string(ctx.Path()) // TODO: need process path before handle rate limit
+	res, err := h.RateLimiter.Get(key)
+	if err != nil {
+		return
+	}
+
+	fmt.Printf("X-Ratelimit-Limit: %s\n", strconv.FormatInt(int64(res.Total), 10))
+	fmt.Printf("X-Ratelimit-Remaining: %s\n", strconv.FormatInt(int64(res.Remaining), 10))
+	fmt.Printf("X-Ratelimit-Reset: %s\n", strconv.FormatInt(res.Reset.Unix(), 10))
+
+	//TODO: handle the case of no remain resource left, the key point is how to notify clients in response
+	if res.Remaining < 0 {
+		after := int64(res.Reset.Sub(time.Now())) / 1e9
+		fmt.Printf("Retry-After: %s\n", strconv.FormatInt(after, 10))
+		return
+	}
+
+	h.ForwardHandler(ctx)
 }
 
 // ForwardHandler receives request and forward to configured services, which contains those actions

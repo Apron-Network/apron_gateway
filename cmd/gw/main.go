@@ -15,8 +15,6 @@ import (
 	"apron.network/gateway/ratelimiter"
 )
 
-const ApronApiKeyFieldName = "apron-api-key"
-
 func startAdminService(addr string, wg *sync.WaitGroup, redisClient *redis.Client) {
 	h := handlers.ManagerHandler{}
 	h.InitStore(&models.StorageManager{
