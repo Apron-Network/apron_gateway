@@ -11,8 +11,8 @@ import (
 	"github.com/go-redis/redis/v8"
 
 	"apron.network/gateway/internal/handlers"
+	"apron.network/gateway/internal/handlers/ratelimiter"
 	"apron.network/gateway/internal/models"
-	"apron.network/gateway/ratelimiter"
 )
 
 func startAdminService(addr string, wg *sync.WaitGroup, redisClient *redis.Client) {

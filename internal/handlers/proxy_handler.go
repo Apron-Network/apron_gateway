@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"apron.network/gateway/ratelimiter"
+	"apron.network/gateway/internal/handlers/ratelimiter"
 	"bytes"
 	"errors"
 	"fmt"
