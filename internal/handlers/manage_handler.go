@@ -33,6 +33,7 @@ func (h *ManagerHandler) InitRouters() {
 	// Service related
 	serviceRouter := h.r.Group("/service")
 	serviceRouter.GET("/", h.listServiceHandler)
+	serviceRouter.GET("/{service_name}/report/{key_id}", h.serviceUsageReportHandler)
 	serviceRouter.POST("/", h.newServiceHandler)
 	serviceRouter.POST("/{service_name}", h.serviceDetailHandler)
 	serviceRouter.PUT("/{service_name}", h.updateServiceHandler)

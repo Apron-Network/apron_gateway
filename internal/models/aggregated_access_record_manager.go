@@ -25,7 +25,6 @@ func (m *AggregatedAccessRecordManager) IncUsage(serviceId, userKey string) {
 		defer m.locks[recordKey].Unlock()
 		rcd.Usage++
 	} else {
-		// TODO: Confirm whether the key need ctor
 		m.locks[recordKey] = &sync.Mutex{}
 		m.locks[recordKey].Lock()
 		defer m.locks[recordKey].Unlock()

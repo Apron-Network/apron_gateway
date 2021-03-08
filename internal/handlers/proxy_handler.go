@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"apron.network/gateway/internal/handlers/ratelimiter"
 	"bytes"
 	"errors"
 	"fmt"
@@ -10,6 +9,8 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+
+	"apron.network/gateway/internal/handlers/ratelimiter"
 
 	"github.com/fasthttp/websocket"
 	"github.com/golang/protobuf/proto"
