@@ -38,7 +38,7 @@ func (m *AggregatedAccessRecordManager) IncUsage(serviceId, userKey string) {
 			EndTime:     0,
 			Usage:       1,
 			PricePlan:   "",
-			cost:        0,
+			Cost:        0,
 		}
 	}
 }
@@ -47,8 +47,18 @@ func (m *AggregatedAccessRecordManager) ExportUsage(serviceId, userKey string) (
 	recordKey := AccessRecordStorageKeyFrom(serviceId, userKey)
 	rcd, ok := m.records[recordKey]
 	if ok {
-		return rcd.ExportAndFlush(), nil
+		return rcd.ExportStrAndFlush(), nil
 	} else {
 		return "", errors.New(fmt.Sprintf("no record found for service %s and user %s", serviceId, userKey))
 	}
+}
+
+func (m *AggregatedAccessRecordManager) ExportAllUsage() ([]*AggregatedAccessRecord, error) {
+	rslt := make([]*AggregatedAccessRecord, len(m.records))
+	i := 0
+	for _, r := range m.records {
+		rslt[i] = r.ExportObjectAndFlush()
+		i++
+	}
+	return rslt, nil
 }

@@ -16,7 +16,7 @@ type AggregatedAccessRecord struct {
 	EndTime     uint64 `json:"end_time"`
 	Usage       uint64 `json:"usage"`
 	PricePlan   string `json:"price_plan"`
-	cost        uint64 `json:"cost"`
+	Cost        uint64 `json:"Cost"`
 }
 
 func (r *AggregatedAccessRecord) Reset(startTime time.Time) {
@@ -27,7 +27,7 @@ func (r *AggregatedAccessRecord) Reset(startTime time.Time) {
 	r.Usage = 0
 }
 
-func (r *AggregatedAccessRecord) ExportAndFlush() string {
+func (r *AggregatedAccessRecord) ExportStrAndFlush() string {
 	currentTime := time.Now().UTC()
 
 	r.EndTime = uint64(currentTime.Unix())
@@ -38,6 +38,20 @@ func (r *AggregatedAccessRecord) ExportAndFlush() string {
 	r.Reset(currentTime)
 
 	return string(strData)
+}
+
+func (r *AggregatedAccessRecord) ExportObjectAndFlush() *AggregatedAccessRecord {
+	currentTime := time.Now().UTC()
+
+	r.EndTime = uint64(currentTime.Unix())
+	rslt := &AggregatedAccessRecord{}
+	tmpData, err := json.Marshal(r)
+	internal.CheckError(err)
+
+	r.Reset(currentTime)
+	err = json.Unmarshal(tmpData, rslt)
+	internal.CheckError(err)
+	return rslt
 }
 
 func AccessRecordStorageKeyFrom(serviceUuid, userKey string) string {
