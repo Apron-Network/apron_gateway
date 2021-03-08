@@ -41,7 +41,8 @@ func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	h.Logger.RecordMsg(fmt.Sprintf("%s: from %s, service: %s, api_key: %s",
+	h.Logger.RecordMsg(fmt.Sprintf("%s|%s: from %s, service: %s, api_key: %s\n",
+		time.Now().UTC().Format("2006-01-02 15:04:05"),
 		requestDetail.URI.String(),
 		ctx.RemoteIP().String(),
 		requestDetail.ServiceNameStr,
