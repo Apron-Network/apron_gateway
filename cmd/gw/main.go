@@ -16,8 +16,10 @@ import (
 	"apron.network/gateway/internal/models"
 )
 
-func startAdminService(addr string, wg *sync.WaitGroup, redisClient *redis.Client) {
-	h := handlers.ManagerHandler{}
+func startAdminService(addr string, wg *sync.WaitGroup, redisClient *redis.Client, manager models.AggregatedAccessRecordManager) {
+	h := handlers.ManagerHandler{
+		AggrAccessRecordManager: manager,
+	}
 	h.InitStore(&models.StorageManager{
 		RedisClient: redisClient,
 	})
@@ -30,7 +32,7 @@ func startAdminService(addr string, wg *sync.WaitGroup, redisClient *redis.Clien
 	wg.Done()
 }
 
-func startProxyService(addr string, wg *sync.WaitGroup, redisClient *redis.Client) {
+func startProxyService(addr string, wg *sync.WaitGroup, redisClient *redis.Client, manager models.AggregatedAccessRecordManager) {
 	// TODO: Load from configurations
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.MaxIdleConns = 100
@@ -54,7 +56,8 @@ func startProxyService(addr string, wg *sync.WaitGroup, redisClient *redis.Clien
 			Max:      60,
 			Duration: time.Minute,
 		}),
-		Logger: &proxyLogger,
+		Logger:                  &proxyLogger,
+		AggrAccessRecordManager: manager,
 	}
 
 	if err := fasthttp.ListenAndServe(addr, h.InternalHandler); err != nil {
@@ -76,8 +79,11 @@ func main() {
 		DB:       0,  // use default DB
 	})
 
-	go startProxyService(":8080", wg, rdb)
-	go startAdminService("127.0.0.1:8082", wg, rdb)
+	aggrAccessRecordManager := models.AggregatedAccessRecordManager{}
+	aggrAccessRecordManager.Init()
+
+	go startProxyService(":8080", wg, rdb, aggrAccessRecordManager)
+	go startAdminService("127.0.0.1:8082", wg, rdb, aggrAccessRecordManager)
 
 	wg.Wait()
 }

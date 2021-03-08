@@ -81,7 +81,7 @@ func (h *ManagerHandler) apiKeyDetailHandler(ctx *fasthttp.RequestCtx) {
 	storageBucketName := internal.ServiceApiKeyStorageBucketName(serviceId)
 
 	if h.storageManager.IsKeyExistingInBucket(storageBucketName, key) {
-		binaryKeyData, err := h.RedisClient.HGet(internal.Ctx(), storageBucketName, key).Result()
+		binaryKeyData, err := h.storageManager.GetRecord(storageBucketName, key)
 		internal.CheckError(err)
 
 		keyDetail := models.ApronApiKey{}

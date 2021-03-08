@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/fasthttp/router"
-	"github.com/go-redis/redis/v8"
 	"github.com/valyala/fasthttp"
 
 	"apron.network/gateway/internal/models"
@@ -12,8 +11,9 @@ import (
 
 // TODO: Add database client to fetch registered service and api keys
 type ManagerHandler struct {
+	AggrAccessRecordManager models.AggregatedAccessRecordManager
+
 	storageManager *models.StorageManager
-	RedisClient    *redis.Client
 	r              *router.Router
 }
 

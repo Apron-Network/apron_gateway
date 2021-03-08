@@ -20,10 +20,11 @@ import (
 )
 
 type ProxyHandler struct {
-	HttpClient     *http.Client
-	StorageManager *models.StorageManager
-	RateLimiter    *ratelimiter.Limiter
-	Logger         *internal.GatewayLogger
+	HttpClient              *http.Client
+	StorageManager          *models.StorageManager
+	RateLimiter             *ratelimiter.Limiter
+	Logger                  *internal.GatewayLogger
+	AggrAccessRecordManager models.AggregatedAccessRecordManager
 
 	requestDetail *models.RequestDetail
 }
@@ -41,14 +42,6 @@ func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	h.Logger.Log(fmt.Sprintf("%s|%s: from %s, service: %s, api_key: %s\n",
-		time.Now().UTC().Format("2006-01-02 15:04:05"),
-		requestDetail.URI.String(),
-		ctx.RemoteIP().String(),
-		requestDetail.ServiceNameStr,
-		requestDetail.ApiKeyStr,
-	))
-
 	fmt.Printf("X-Ratelimit-Limit: %s\n", strconv.FormatInt(int64(res.Total), 10))
 	fmt.Printf("X-Ratelimit-Remaining: %s\n", strconv.FormatInt(int64(res.Remaining), 10))
 	fmt.Printf("X-Ratelimit-Reset: %s\n", strconv.FormatInt(res.Reset.Unix(), 10))
@@ -57,8 +50,26 @@ func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
 	if res.Remaining < 0 {
 		after := int64(res.Reset.Sub(time.Now())) / 1e9
 		fmt.Printf("Retry-After: %s\n", strconv.FormatInt(after, 10))
+
+		h.Logger.Log(fmt.Sprintf("%s|429 error|%s: from %s, service: %s, api_key: %s\n",
+			time.Now().UTC().Format("2006-01-02 15:04:05"),
+			requestDetail.URI.String(),
+			ctx.RemoteIP().String(),
+			requestDetail.ServiceNameStr,
+			requestDetail.ApiKeyStr,
+		))
+
 		return
 	}
+
+	h.Logger.Log(fmt.Sprintf("%s|%s: from %s, service: %s, api_key: %s\n",
+		time.Now().UTC().Format("2006-01-02 15:04:05"),
+		requestDetail.URI.String(),
+		ctx.RemoteIP().String(),
+		requestDetail.ServiceNameStr,
+		requestDetail.ApiKeyStr,
+	))
+	h.AggrAccessRecordManager.IncUsage(requestDetail.ServiceNameStr, requestDetail.ApiKeyStr)
 
 	h.ForwardHandler(ctx)
 }
