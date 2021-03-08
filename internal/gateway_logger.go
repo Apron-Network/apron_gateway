@@ -12,8 +12,6 @@ import (
 
 const logBufferSize = 100 * 1024 // Default buf size 100KB
 
-type LoggingLevels int
-
 type GatewayLogger struct {
 	LogFile   string
 	MaxRotate int
@@ -30,10 +28,12 @@ type GatewayLogger struct {
 	lastLogTime time.Time
 }
 
+//Init inits log writer and channel, starts two goroutines for processing log message and rotating log file
 func (l *GatewayLogger) Init() {
 	l.initLogFile()
 	l.msgChannel = make(chan string, logBufferSize)
 
+	// Message channel processor
 	go func() {
 		for msg := range l.msgChannel {
 			fmt.Printf("Received message from channel: %s\n", msg)
@@ -61,10 +61,12 @@ func (l *GatewayLogger) Init() {
 	}()
 }
 
-func (l *GatewayLogger) RecordMsg(msg string) {
+func (l *GatewayLogger) Log(msg string) {
 	l.msgChannel <- msg
 }
 
+//rotateFile rotates log file with timestamp appended to the base filename,
+// and remove older files greater than max configured rotated file size
 func (l *GatewayLogger) rotateFile() error {
 	l.logLock.Lock()
 	defer l.logLock.Unlock()
@@ -119,6 +121,7 @@ func (l *GatewayLogger) rotateFile() error {
 	return nil
 }
 
+//initLogFile creates log dir if needed and init bufio writer
 func (l *GatewayLogger) initLogFile() {
 	// Create log path if not existing
 	absLogPath, err := filepath.Abs(l.LogFile)
@@ -143,6 +146,8 @@ func (l *GatewayLogger) initLogFile() {
 	l.logfileBase = l.logfileName[:len(l.logfileName)-len(l.logfileExt)]
 }
 
+//initLogWriter init bufio writer and reset writtenSize.
+// This function will also be invoked every rotation occurred
 func (l *GatewayLogger) initLogWriter() {
 	absLogPath, err := filepath.Abs(l.LogFile)
 	l.logFile, err = os.OpenFile(absLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -152,7 +157,9 @@ func (l *GatewayLogger) initLogWriter() {
 	l.writtenSize = 0
 }
 
-//rotationRequired checks whether logging requires rotation
+//rotationRequired checks whether logging requires rotation.
 func (l *GatewayLogger) rotationRequired() bool {
-	return l.writtenSize > 0 && (time.Now().Hour() == 0 || time.Now().Day() > l.lastLogTime.Day())
+	return l.writtenSize > 0 && // Do not rotate file w/o content written
+		(time.Now().Hour() == 0 || // Rotate the log file every day
+			time.Now().Day() > l.lastLogTime.Day()) // Handle the case that no new log in 12:00~01:00 UTC
 }
