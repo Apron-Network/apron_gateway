@@ -1,6 +1,7 @@
 package main
 
 import (
+	"apron.network/gateway/internal"
 	"log"
 	"net/http"
 	"sync"
@@ -36,6 +37,11 @@ func startProxyService(addr string, wg *sync.WaitGroup, redisClient *redis.Clien
 	t.MaxConnsPerHost = 100
 	t.MaxIdleConnsPerHost = 100
 
+	proxyLogger := internal.GatewayLogger{
+		LogFile: "logs/proxy_log.txt",
+	}
+	proxyLogger.Init()
+
 	h := handlers.ProxyHandler{
 		HttpClient: &http.Client{
 			Timeout:   10 * time.Second,
@@ -44,11 +50,11 @@ func startProxyService(addr string, wg *sync.WaitGroup, redisClient *redis.Clien
 		StorageManager: &models.StorageManager{
 			RedisClient: redisClient,
 		},
-
 		RateLimiter: ratelimiter.New(ratelimiter.Options{
 			Max:      60,
 			Duration: time.Minute,
 		}),
+		Logger: &proxyLogger,
 	}
 
 	if err := fasthttp.ListenAndServe(addr, h.InternalHandler); err != nil {
