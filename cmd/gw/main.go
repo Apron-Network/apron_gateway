@@ -2,8 +2,11 @@ package main
 
 import (
 	"apron.network/gateway/internal"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -15,6 +18,14 @@ import (
 	"apron.network/gateway/internal/handlers/ratelimiter"
 	"apron.network/gateway/internal/models"
 )
+
+func getEnv(key, defaultVal string) string {
+	if val, ok := os.LookupEnv(key); ok {
+		return val
+	} else {
+		return defaultVal
+	}
+}
 
 func startAdminService(addr string, wg *sync.WaitGroup, redisClient *redis.Client, manager models.AggregatedAccessRecordManager) {
 	h := handlers.ManagerHandler{
@@ -68,13 +79,24 @@ func startProxyService(addr string, wg *sync.WaitGroup, redisClient *redis.Clien
 }
 
 func main() {
-	// TODO: Add cli params support, to pass in config file path
 	// TODO: Define config file format - After logic finalized
 	wg := new(sync.WaitGroup)
 	wg.Add(2)
 
+	proxyPort, err := strconv.ParseInt(getEnv("PROXY_PORT", "8080"), 10, 32)
+	internal.CheckError(err)
+	adminAddrStr := getEnv("ADMIN_ADDR", "127.0.0.1:8082")
+	redisServer := getEnv("REDIS_SERVER", "localhost:6379")
+
+	proxyServerAddr := fmt.Sprintf(":%d", proxyPort)
+
+	fmt.Println("Service info:")
+	fmt.Printf("\tProxy addr: %s\n", proxyServerAddr)
+	fmt.Printf("\tAdmin service addr: %s\n", adminAddrStr)
+	fmt.Printf("\tRedis server: %s\n", redisServer)
+
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
+		Addr:     redisServer,
 		Password: "", // no password set
 		DB:       0,  // use default DB
 	})
@@ -82,8 +104,8 @@ func main() {
 	aggrAccessRecordManager := models.AggregatedAccessRecordManager{}
 	aggrAccessRecordManager.Init()
 
-	go startProxyService(":8080", wg, rdb, aggrAccessRecordManager)
-	go startAdminService("127.0.0.1:8082", wg, rdb, aggrAccessRecordManager)
+	go startProxyService(proxyServerAddr, wg, rdb, aggrAccessRecordManager)
+	go startAdminService(adminAddrStr, wg, rdb, aggrAccessRecordManager)
 
 	wg.Wait()
 }
