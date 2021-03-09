@@ -4,8 +4,6 @@ services:
   redis:
     image: redis:latest
     restart: always
-    ports:
-      - 6379:6379
     volumes:
       - ./conf/redis.conf:/etc/redis/redis.conf:rw
       - ./data:/data:rw
@@ -17,3 +15,19 @@ services:
     restart: always
     ports:
       - 2345:80
+
+  gateway:
+    image: apron/gateway
+    build: .
+    restart: always
+    ports:
+      - 8080:8080
+      - 8082:8082
+    volumes:
+      - ./logs:/app/logs/
+    environment:
+      - PROXY_PORT=8080
+      - ADMIN_ADDR=0.0.0.0:8082
+      - REDIS_SERVER=redis:6379
+    depends_on:
+      - redis
