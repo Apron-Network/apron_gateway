@@ -49,3 +49,14 @@ func (h *ManagerHandler) updateServiceHandler(ctx *fasthttp.RequestCtx) {
 func (h *ManagerHandler) deleteServiceHandler(ctx *fasthttp.RequestCtx) {
 	fmt.Fprintf(ctx, "Delete Service")
 }
+func (h *ManagerHandler) serviceUsageReportHandler(ctx *fasthttp.RequestCtx) {
+	serviceId := ctx.UserValue("service_name").(string)
+	keyId := ctx.UserValue("key_id").(string)
+	rslt, err := h.AggrAccessRecordManager.ExportUsage(serviceId, keyId)
+	if err != nil {
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		ctx.SetBodyString(err.Error())
+	} else {
+		ctx.SetBodyString(rslt)
+	}
+}
