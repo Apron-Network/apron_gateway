@@ -2,6 +2,8 @@ package main
 
 import (
 	"apron.network/gateway/internal"
+	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -73,8 +75,21 @@ func main() {
 	wg := new(sync.WaitGroup)
 	wg.Add(2)
 
+	// CLI parser
+	redisServerPtr := flag.String("redis", "localhost:6379", "redis server used for saving service and user key")
+	proxyPortPtr := flag.Int("proxy-port", 8080, "proxy server port")
+	adminAddrPtr := flag.String("admin-addr", "127.0.0.1:8082", "Admin service address")
+	flag.Parse()
+
+	proxyServerAddr := fmt.Sprintf(":%d", *proxyPortPtr)
+
+	fmt.Println("Service info:")
+	fmt.Printf("\tProxy addr: %s\n", proxyServerAddr)
+	fmt.Printf("\tAdmin service addr: %s\n", *adminAddrPtr)
+	fmt.Printf("\tRedis server: %s\n", *redisServerPtr)
+
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
+		Addr:     *redisServerPtr,
 		Password: "", // no password set
 		DB:       0,  // use default DB
 	})
@@ -82,8 +97,8 @@ func main() {
 	aggrAccessRecordManager := models.AggregatedAccessRecordManager{}
 	aggrAccessRecordManager.Init()
 
-	go startProxyService(":8080", wg, rdb, aggrAccessRecordManager)
-	go startAdminService("127.0.0.1:8082", wg, rdb, aggrAccessRecordManager)
+	go startProxyService(proxyServerAddr, wg, rdb, aggrAccessRecordManager)
+	go startAdminService(*adminAddrPtr, wg, rdb, aggrAccessRecordManager)
 
 	wg.Wait()
 }
