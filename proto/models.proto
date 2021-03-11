@@ -13,6 +13,9 @@ message ApronService {
   string name = 1;
   string base_url = 2;
   string schema = 3;
+  bool ratelimit_by_gateway = 4;
+  int64 ratelimit_count = 5;
+  int64 ratelimit_second = 6;
 }
 
 message ApronUser {

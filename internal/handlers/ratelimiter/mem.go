@@ -27,6 +27,14 @@ type memoryLimiter struct {
 	lock     sync.Mutex
 }
 
+func (m *memoryLimiter) getDurationSecond() int {
+	return int(m.duration * time.Second)
+}
+
+func (m *memoryLimiter) getLimitCount() int {
+	return m.max
+}
+
 func newMemoryLimiter(opts *Options) *Limiter {
 	m := &memoryLimiter{
 		max:      opts.Max,

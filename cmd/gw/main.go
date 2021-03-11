@@ -1,7 +1,6 @@
 package main
 
 import (
-	"apron.network/gateway/internal"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,6 +8,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"apron.network/gateway/internal"
 
 	"github.com/valyala/fasthttp"
 
@@ -63,7 +64,7 @@ func startProxyService(addr string, wg *sync.WaitGroup, redisClient *redis.Clien
 		StorageManager: &models.StorageManager{
 			RedisClient: redisClient,
 		},
-		RateLimiter: ratelimiter.New(ratelimiter.Options{
+		DefaultRateLimiter: ratelimiter.New(ratelimiter.Options{
 			Max:      60,
 			Duration: time.Minute,
 		}),

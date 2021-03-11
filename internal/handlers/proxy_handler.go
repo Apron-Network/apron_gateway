@@ -22,7 +22,7 @@ import (
 type ProxyHandler struct {
 	HttpClient              *http.Client
 	StorageManager          *models.StorageManager
-	RateLimiter             *ratelimiter.Limiter
+	DefaultRateLimiter      *ratelimiter.Limiter // Ratelimit for gateway and service w/ no ratelimit configuration
 	Logger                  *internal.GatewayLogger
 	AggrAccessRecordManager models.AggregatedAccessRecordManager
 
@@ -39,32 +39,9 @@ func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
 	h.requestDetail = requestDetail
 	h.validateRequest(ctx)
 
-	key := string(ctx.Path()) // TODO: need process path before handle rate limit
-	res, err := h.RateLimiter.Get(key)
-	if err != nil {
+	// Handle rate limit for gateway, disable for now
+	if err = h.processRateLimiter(ctx, h.DefaultRateLimiter); err != nil {
 		internal.GenerateServerErrorResponse(ctx, err)
-		return
-	}
-
-	ctx.Response.Header.Set("X-Ratelimit-Limit", strconv.FormatInt(int64(res.Total), 10))
-	ctx.Response.Header.Set("X-Ratelimit-Remaining", strconv.FormatInt(int64(res.Remaining), 10))
-	ctx.Response.Header.Set("X-Ratelimit-Reset", strconv.FormatInt(int64(res.Reset.Unix()), 10))
-
-	// TODO: handle the case of no remain resource left, the key point is how to notify clients in response
-	if res.Remaining < 0 {
-		after := int64(res.Reset.Sub(time.Now())) / 1e9
-		ctx.Response.Header.Set("Retry-After", strconv.FormatInt(after, 10))
-
-		h.Logger.Log(fmt.Sprintf("%s|429 error|%s: from %s, service: %s, api_key: %s\n",
-			time.Now().UTC().Format("2006-01-02 15:04:05"),
-			requestDetail.URI.String(),
-			ctx.RemoteIP().String(),
-			requestDetail.ServiceNameStr,
-			requestDetail.ApiKeyStr,
-		))
-
-		ctx.SetStatusCode(fasthttp.StatusTooManyRequests)
-
 		return
 	}
 
@@ -93,9 +70,33 @@ func (h *ProxyHandler) ForwardHandler(ctx *fasthttp.RequestCtx) {
 	}
 
 	service, err := h.loadService(h.requestDetail.ServiceNameStr)
+
+	// Set to default rate limiter if configured to use gateway ratelimit but no detail
+	if service.RatelimitByGateway {
+		if service.RatelimitCount == 0 && service.RatelimitSecond == 0 {
+			service.RatelimitSecond = int64(h.DefaultRateLimiter.GetDueationSecond())
+			service.RatelimitCount = int64(h.DefaultRateLimiter.GetLimitCount())
+		}
+	}
+
 	if err != nil {
 		internal.GenerateServerErrorResponse(ctx, err)
 		return
+	}
+
+	// TODO: Split ws and http ratelimit
+
+	// Only process rate limiter if set RateLimitByGateway field
+	if service.RatelimitByGateway {
+		serviceRateLimiter := ratelimiter.New(ratelimiter.Options{
+			Max:      int(service.RatelimitCount),
+			Duration: time.Duration(service.RatelimitSecond) * time.Second,
+		})
+
+		if err = h.processRateLimiter(ctx, serviceRateLimiter); err != nil {
+			internal.GenerateServerErrorResponse(ctx, err)
+			return
+		}
 	}
 
 	if websocket.FastHTTPIsWebSocketUpgrade(ctx) && (service.Schema == "ws" || service.Schema == "wss") {
@@ -147,7 +148,7 @@ func (h *ProxyHandler) forwardWebsocketRequest(ctx *fasthttp.RequestCtx, service
 }
 
 func (h *ProxyHandler) forwardHttpRequest(ctx *fasthttp.RequestCtx, service models.ApronService) {
-	// Build URI, the forward URL is local httpbin URL
+	// TODO: Check whether tail slash changes server behavior
 	serviceUrlStr := fmt.Sprintf("%s://%s", service.Schema, service.BaseUrl)
 	serviceUrl, _ := url.Parse(serviceUrlStr)
 	if bytes.Compare(h.requestDetail.Path, []byte("/")) != 0 {
@@ -222,4 +223,34 @@ func (h *ProxyHandler) loadService(serviceName string) (*models.ApronService, er
 	}
 
 	return &service, nil
+}
+
+func (h *ProxyHandler) processRateLimiter(ctx *fasthttp.RequestCtx, limiter *ratelimiter.Limiter) error {
+	key := string(ctx.Path()) // TODO: need process path before handle rate limit
+	res, err := limiter.Get(key)
+	if err != nil {
+		return err
+	}
+
+	ctx.Response.Header.Set("X-Ratelimit-Limit", strconv.FormatInt(int64(res.Total), 10))
+	ctx.Response.Header.Set("X-Ratelimit-Remaining", strconv.FormatInt(int64(res.Remaining), 10))
+	ctx.Response.Header.Set("X-Ratelimit-Reset", strconv.FormatInt(int64(res.Reset.Unix()), 10))
+
+	// TODO: handle the case of no remain resource left, the key point is how to notify clients in response
+	if res.Remaining < 0 {
+		after := int64(res.Reset.Sub(time.Now())) / 1e9
+		ctx.Response.Header.Set("Retry-After", strconv.FormatInt(after, 10))
+
+		h.Logger.Log(fmt.Sprintf("%s|429 error|%s: from %s, service: %s, api_key: %s\n",
+			time.Now().UTC().Format("2006-01-02 15:04:05"),
+			h.requestDetail.URI.String(),
+			ctx.RemoteIP().String(),
+			h.requestDetail.ServiceNameStr,
+			h.requestDetail.ApiKeyStr,
+		))
+
+		ctx.SetStatusCode(fasthttp.StatusTooManyRequests)
+		return errors.New("too many requests")
+	}
+	return nil
 }

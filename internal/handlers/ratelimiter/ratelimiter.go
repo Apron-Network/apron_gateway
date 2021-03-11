@@ -86,3 +86,11 @@ func (l *Limiter) Get(id string, policy ...int) (Result, error) {
 func (l *Limiter) Remove(id string) error {
 	return l.removeLimit(id)
 }
+
+func (l *Limiter) GetLimitCount() int {
+	return l.getLimitCount()
+}
+
+func (l *Limiter) GetDueationSecond() int {
+	return l.getDurationSecond()
+}
