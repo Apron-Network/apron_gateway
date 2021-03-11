@@ -54,8 +54,7 @@ func (h *ManagerHandler) serviceUsageReportHandler(ctx *fasthttp.RequestCtx) {
 	keyId := ctx.UserValue("key_id").(string)
 	rslt, err := h.AggrAccessRecordManager.ExportUsage(serviceId, keyId)
 	if err != nil {
-		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
-		ctx.SetBodyString(err.Error())
+		internal.GenerateServerErrorResponse(ctx, err)
 	} else {
 		ctx.SetBodyString(rslt)
 	}

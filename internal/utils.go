@@ -34,6 +34,14 @@ func ServiceApiKeyStorageBucketName(service_id string) string {
 	return fmt.Sprintf("ApronApiKey:%s", service_id)
 }
 
+// GenerateServerErrorResponse set respond status to 500 and fill detail message if error occurred,
+// this function will replace CheckError in web request related code
+// TODO: Update the function to involve all HTTP errors occurred in project, such as 404, 429
+func GenerateServerErrorResponse(ctx *fasthttp.RequestCtx, err error) {
+	ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+	ctx.SetBodyString(err.Error())
+}
+
 // GenTimestamp ...
 func GenTimestamp() string {
 	time := time.Now().UnixNano() / 1e6

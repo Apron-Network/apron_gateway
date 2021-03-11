@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -33,13 +32,17 @@ type ProxyHandler struct {
 // InternalHandler ...
 func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
 	requestDetail, err := models.ExtractCtxRequestDetail(ctx)
-	internal.CheckError(err)
+	if err != nil {
+		internal.GenerateServerErrorResponse(ctx, err)
+		return
+	}
 	h.requestDetail = requestDetail
 	h.validateRequest(ctx)
 
 	key := string(ctx.Path()) // TODO: need process path before handle rate limit
 	res, err := h.RateLimiter.Get(key)
 	if err != nil {
+		internal.GenerateServerErrorResponse(ctx, err)
 		return
 	}
 
@@ -87,17 +90,22 @@ func (h *ProxyHandler) ForwardHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	service := h.loadService(h.requestDetail.ServiceNameStr)
+	service, err := h.loadService(h.requestDetail.ServiceNameStr)
+	if err != nil {
+		internal.GenerateServerErrorResponse(ctx, err)
+		return
+	}
 
 	if websocket.FastHTTPIsWebSocketUpgrade(ctx) && (service.Schema == "ws" || service.Schema == "wss") {
-		h.forwardWebsocketRequest(ctx, service)
+		h.forwardWebsocketRequest(ctx, *service)
 	} else if service.Schema == "http" || service.Schema == "https" {
-		h.forwardHttpRequest(ctx, service)
+		h.forwardHttpRequest(ctx, *service)
 	} else {
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 		ctx.SetBodyString("regisited service has different schema with request")
 	}
 }
+
 func (h *ProxyHandler) forwardWebsocketRequest(ctx *fasthttp.RequestCtx, service models.ApronService) {
 	upgrader := websocket.FastHTTPUpgrader{
 		ReadBufferSize:  1024,
@@ -115,17 +123,21 @@ func (h *ProxyHandler) forwardWebsocketRequest(ctx *fasthttp.RequestCtx, service
 
 		// TODO: Check whether header information are required for service ws
 		serviceConnection, _, err := dialer.Dial(serviceUrl.String(), nil)
-		internal.CheckError(err)
+		if err != nil {
+			internal.GenerateServerErrorResponse(ctx, err)
+			return
+		}
 
+		// TODO: Check whether it is needed and able to split read and write in two goroutines
 		for {
 			messageType, p, err := serviceConnection.ReadMessage()
 			if err != nil {
-				log.Println(err)
+				internal.GenerateServerErrorResponse(ctx, err)
 				return
 			}
 
 			if err := ws.WriteMessage(messageType, p); err != nil {
-				log.Println(err)
+				internal.GenerateServerErrorResponse(ctx, err)
 				return
 			}
 		}
@@ -195,13 +207,17 @@ func (h *ProxyHandler) validateRequest(ctx *fasthttp.RequestCtx) error {
 	return errors.New("unauthorized")
 }
 
-func (h *ProxyHandler) loadService(serviceName string) models.ApronService {
+func (h *ProxyHandler) loadService(serviceName string) (*models.ApronService, error) {
 	r, err := h.StorageManager.GetRecord(internal.ServiceBucketName, serviceName)
-	internal.CheckError(err)
+	if err != nil {
+		return nil, err
+	}
 
 	service := models.ApronService{}
 	err = proto.Unmarshal([]byte(r), &service)
-	internal.CheckError(err)
+	if err != nil {
+		return nil, err
+	}
 
-	return service
+	return &service, nil
 }

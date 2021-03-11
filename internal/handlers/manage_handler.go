@@ -7,6 +7,7 @@ import (
 	"github.com/fasthttp/router"
 	"github.com/valyala/fasthttp"
 
+	"apron.network/gateway/internal"
 	"apron.network/gateway/internal/models"
 )
 
@@ -61,13 +62,12 @@ func (h *ManagerHandler) indexHandler(ctx *fasthttp.RequestCtx) {
 
 func (h *ManagerHandler) allUsageReportHandler(ctx *fasthttp.RequestCtx) {
 	if rslt, err := h.AggrAccessRecordManager.ExportAllUsage(); err != nil {
-		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
-		ctx.SetBodyString(err.Error())
+		internal.GenerateServerErrorResponse(ctx, err)
 	} else {
 		usageRecordsJsonByte, err := json.Marshal(rslt)
 		if err != nil {
-			ctx.SetStatusCode(fasthttp.StatusInternalServerError)
-			ctx.SetBodyString(err.Error())
+			internal.GenerateServerErrorResponse(ctx, err)
+			return
 		}
 		ctx.SetBody(usageRecordsJsonByte)
 	}
