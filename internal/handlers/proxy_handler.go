@@ -46,14 +46,14 @@ func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	fmt.Printf("X-Ratelimit-Limit: %s\n", strconv.FormatInt(int64(res.Total), 10))
-	fmt.Printf("X-Ratelimit-Remaining: %s\n", strconv.FormatInt(int64(res.Remaining), 10))
-	fmt.Printf("X-Ratelimit-Reset: %s\n", strconv.FormatInt(res.Reset.Unix(), 10))
+	ctx.Response.Header.Set("X-Ratelimit-Limit", strconv.FormatInt(int64(res.Total), 10))
+	ctx.Response.Header.Set("X-Ratelimit-Remaining", strconv.FormatInt(int64(res.Remaining), 10))
+	ctx.Response.Header.Set("X-Ratelimit-Reset", strconv.FormatInt(int64(res.Reset.Unix()), 10))
 
-	//TODO: handle the case of no remain resource left, the key point is how to notify clients in response
+	// TODO: handle the case of no remain resource left, the key point is how to notify clients in response
 	if res.Remaining < 0 {
 		after := int64(res.Reset.Sub(time.Now())) / 1e9
-		fmt.Printf("Retry-After: %s\n", strconv.FormatInt(after, 10))
+		ctx.Response.Header.Set("Retry-After", strconv.FormatInt(after, 10))
 
 		h.Logger.Log(fmt.Sprintf("%s|429 error|%s: from %s, service: %s, api_key: %s\n",
 			time.Now().UTC().Format("2006-01-02 15:04:05"),
@@ -62,6 +62,8 @@ func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
 			requestDetail.ServiceNameStr,
 			requestDetail.ApiKeyStr,
 		))
+
+		ctx.SetStatusCode(fasthttp.StatusTooManyRequests)
 
 		return
 	}
