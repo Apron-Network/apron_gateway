@@ -19,6 +19,25 @@ import (
 	"apron.network/gateway/internal/models"
 )
 
+var (
+	corsAllowHeaders     = "authorization"
+	corsAllowMethods     = "HEAD,GET,POST,PUT,DELETE,OPTIONS"
+	corsAllowOrigin      = "*"
+	corsAllowCredentials = "true"
+)
+
+func CORS(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+	return func(ctx *fasthttp.RequestCtx) {
+
+		ctx.Response.Header.Set("Access-Control-Allow-Credentials", corsAllowCredentials)
+		ctx.Response.Header.Set("Access-Control-Allow-Headers", corsAllowHeaders)
+		ctx.Response.Header.Set("Access-Control-Allow-Methods", corsAllowMethods)
+		ctx.Response.Header.Set("Access-Control-Allow-Origin", corsAllowOrigin)
+
+		next(ctx)
+	}
+}
+
 func getEnv(key, defaultVal string) string {
 	if val, ok := os.LookupEnv(key); ok {
 		return val
@@ -36,7 +55,7 @@ func startAdminService(addr string, wg *sync.WaitGroup, redisClient *redis.Clien
 	})
 	h.InitRouters()
 
-	if err := fasthttp.ListenAndServe(addr, h.Handler()); err != nil {
+	if err := fasthttp.ListenAndServe(addr, CORS(h.Handler())); err != nil {
 		log.Fatalf("Error in Admin service: %s", err)
 		wg.Done()
 	}
@@ -71,7 +90,7 @@ func startProxyService(addr string, wg *sync.WaitGroup, redisClient *redis.Clien
 		AggrAccessRecordManager: manager,
 	}
 
-	if err := fasthttp.ListenAndServe(addr, h.InternalHandler); err != nil {
+	if err := fasthttp.ListenAndServe(addr, CORS(h.InternalHandler)); err != nil {
 		log.Fatalf("Error in Proxy service: %s", err)
 		wg.Done()
 	}
