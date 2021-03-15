@@ -28,7 +28,6 @@ var (
 
 func CORS(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
-
 		ctx.Response.Header.Set("Access-Control-Allow-Credentials", corsAllowCredentials)
 		ctx.Response.Header.Set("Access-Control-Allow-Headers", corsAllowHeaders)
 		ctx.Response.Header.Set("Access-Control-Allow-Methods", corsAllowMethods)
@@ -46,9 +45,10 @@ func getEnv(key, defaultVal string) string {
 	}
 }
 
-func startAdminService(addr string, wg *sync.WaitGroup, redisClient *redis.Client, manager models.AggregatedAccessRecordManager) {
+func startAdminService(addr string, wg *sync.WaitGroup, redisClient *redis.Client, manager models.AggregatedAccessRecordManager, accessLogChannel chan string) {
 	h := handlers.ManagerHandler{
 		AggrAccessRecordManager: manager,
+		AccessLogChannel:        accessLogChannel,
 	}
 	h.InitStore(&models.StorageManager{
 		RedisClient: redisClient,
@@ -62,7 +62,7 @@ func startAdminService(addr string, wg *sync.WaitGroup, redisClient *redis.Clien
 	wg.Done()
 }
 
-func startProxyService(addr string, wg *sync.WaitGroup, redisClient *redis.Client, manager models.AggregatedAccessRecordManager) {
+func startProxyService(addr string, wg *sync.WaitGroup, redisClient *redis.Client, manager models.AggregatedAccessRecordManager, accessLogChannel chan string) {
 	// TODO: Load from configurations
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.MaxIdleConns = 100
@@ -88,6 +88,7 @@ func startProxyService(addr string, wg *sync.WaitGroup, redisClient *redis.Clien
 		}),
 		Logger:                  &proxyLogger,
 		AggrAccessRecordManager: manager,
+		AccessLogChannel:        accessLogChannel,
 	}
 
 	if err := fasthttp.ListenAndServe(addr, CORS(h.InternalHandler)); err != nil {
@@ -123,8 +124,11 @@ func main() {
 	aggrAccessRecordManager := models.AggregatedAccessRecordManager{}
 	aggrAccessRecordManager.Init()
 
-	go startProxyService(proxyServerAddr, wg, rdb, aggrAccessRecordManager)
-	go startAdminService(adminAddrStr, wg, rdb, aggrAccessRecordManager)
+	accessLogChannel := make(chan string, 4096)
+	defer close(accessLogChannel)
+
+	go startProxyService(proxyServerAddr, wg, rdb, aggrAccessRecordManager, accessLogChannel)
+	go startAdminService(adminAddrStr, wg, rdb, aggrAccessRecordManager, accessLogChannel)
 
 	wg.Wait()
 }
