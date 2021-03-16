@@ -26,8 +26,10 @@ type ProxyHandler struct {
 	RateLimiter             *ratelimiter.Limiter
 	Logger                  *internal.GatewayLogger
 	AggrAccessRecordManager models.AggregatedAccessRecordManager
+	AccessLogChannel        chan string
 
-	requestDetail *models.RequestDetail
+	requestDetail    *models.RequestDetail
+	serviceAggrCount map[string]uint32 // Simple aggr count for detail logs
 }
 
 // InternalHandler ...
@@ -71,6 +73,7 @@ func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
 		requestDetail.ApiKeyStr,
 	))
 	h.AggrAccessRecordManager.IncUsage(requestDetail.ServiceNameStr, requestDetail.ApiKeyStr)
+	h.AccessLogChannel <- fmt.Sprintf("{\"type\": \"%s\", \"service\": \"%s\", \"userkey\":\"%s\"}", "access", requestDetail.ServiceNameStr, requestDetail.ApiKeyStr)
 
 	h.ForwardHandler(ctx)
 }

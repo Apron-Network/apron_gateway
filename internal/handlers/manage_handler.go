@@ -3,9 +3,10 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-
 	"github.com/fasthttp/router"
+	"github.com/fasthttp/websocket"
 	"github.com/valyala/fasthttp"
+	"log"
 
 	"apron.network/gateway/internal/models"
 )
@@ -14,8 +15,9 @@ import (
 type ManagerHandler struct {
 	AggrAccessRecordManager models.AggregatedAccessRecordManager
 
-	storageManager *models.StorageManager
-	r              *router.Router
+	storageManager   *models.StorageManager
+	r                *router.Router
+	AccessLogChannel chan string
 }
 
 func (h *ManagerHandler) InitStore(storeMgr *models.StorageManager) {
@@ -30,6 +32,8 @@ func (h *ManagerHandler) InitRouters() {
 	h.r = router.New()
 
 	h.r.GET("/", h.indexHandler)
+
+	h.r.GET("/detailed_logs", h.detailedUserReportHandler)
 
 	// Service related
 	serviceRouter := h.r.Group("/service")
@@ -57,6 +61,30 @@ func (h *ManagerHandler) InitRouters() {
 
 func (h *ManagerHandler) indexHandler(ctx *fasthttp.RequestCtx) {
 	fmt.Fprintf(ctx, "It Works!")
+}
+
+func (h *ManagerHandler) detailedUserReportHandler(ctx *fasthttp.RequestCtx) {
+	fmt.Println("Detailed logs")
+	if websocket.FastHTTPIsWebSocketUpgrade(ctx) {
+		upgrader := websocket.FastHTTPUpgrader{
+			ReadBufferSize:  1024,
+			WriteBufferSize: 1024,
+		}
+
+		var logMsg string
+
+		upgrader.Upgrade(ctx, func(ws *websocket.Conn) {
+			for {
+				logMsg = <-h.AccessLogChannel
+				if err := ws.WriteMessage(websocket.TextMessage, []byte(logMsg)); err != nil {
+					log.Println(err)
+					return
+				}
+			}
+		})
+	} else {
+		ctx.SetStatusCode(fasthttp.StatusNotFound)
+	}
 }
 
 func (h *ManagerHandler) allUsageReportHandler(ctx *fasthttp.RequestCtx) {
