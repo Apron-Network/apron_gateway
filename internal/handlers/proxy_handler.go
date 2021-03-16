@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -73,7 +74,16 @@ func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
 		requestDetail.ApiKeyStr,
 	))
 	h.AggrAccessRecordManager.IncUsage(requestDetail.ServiceNameStr, requestDetail.ApiKeyStr)
-	h.AccessLogChannel <- fmt.Sprintf("{\"type\": \"%s\", \"service\": \"%s\", \"userkey\":\"%s\"}", "access", requestDetail.ServiceNameStr, requestDetail.ApiKeyStr)
+	access_log := models.AccessLog{
+		Ts:          int64(int(time.Now().UnixNano() / 1e6)),
+		ServiceName: requestDetail.ServiceNameStr,
+		UserKey:     requestDetail.ApiKeyStr,
+		RequestIp:   string(ctx.RemoteIP().String()),
+		RequestPath: string(requestDetail.ProxyRequestPath),
+	}
+	access_log_bytes, err := json.Marshal(&access_log)
+	internal.CheckError(err)
+	h.AccessLogChannel <- string(access_log_bytes)
 
 	h.ForwardHandler(ctx)
 }

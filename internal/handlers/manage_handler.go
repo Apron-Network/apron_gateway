@@ -3,10 +3,11 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+
 	"github.com/fasthttp/router"
 	"github.com/fasthttp/websocket"
 	"github.com/valyala/fasthttp"
-	"log"
 
 	"apron.network/gateway/internal/models"
 )
@@ -64,7 +65,6 @@ func (h *ManagerHandler) indexHandler(ctx *fasthttp.RequestCtx) {
 }
 
 func (h *ManagerHandler) detailedUserReportHandler(ctx *fasthttp.RequestCtx) {
-	fmt.Println("Detailed logs")
 	if websocket.FastHTTPIsWebSocketUpgrade(ctx) {
 		upgrader := websocket.FastHTTPUpgrader{
 			ReadBufferSize:  1024,

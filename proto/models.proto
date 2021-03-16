@@ -18,3 +18,11 @@ message ApronService {
 message ApronUser {
   string email = 1;
 }
+
+message AccessLog {
+  int64 ts = 1;
+  string service_name = 2;
+  string user_key = 3;
+  string request_ip = 4;
+  string request_path = 5;
+}
