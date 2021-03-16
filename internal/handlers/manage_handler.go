@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"apron.network/gateway/internal"
 	"github.com/fasthttp/router"
 	"github.com/fasthttp/websocket"
 	"github.com/valyala/fasthttp"
@@ -69,11 +70,14 @@ func (h *ManagerHandler) detailedUserReportHandler(ctx *fasthttp.RequestCtx) {
 		upgrader := websocket.FastHTTPUpgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
+			CheckOrigin: func(ctx *fasthttp.RequestCtx) bool {
+				return true
+			},
 		}
 
 		var logMsg string
 
-		upgrader.Upgrade(ctx, func(ws *websocket.Conn) {
+		err := upgrader.Upgrade(ctx, func(ws *websocket.Conn) {
 			for {
 				logMsg = <-h.AccessLogChannel
 				if err := ws.WriteMessage(websocket.TextMessage, []byte(logMsg)); err != nil {
@@ -82,6 +86,7 @@ func (h *ManagerHandler) detailedUserReportHandler(ctx *fasthttp.RequestCtx) {
 				}
 			}
 		})
+		internal.CheckError(err)
 	} else {
 		ctx.SetStatusCode(fasthttp.StatusNotFound)
 	}
