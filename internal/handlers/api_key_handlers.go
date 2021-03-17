@@ -96,12 +96,9 @@ func (h *ManagerHandler) newApiKeyHandler(ctx *fasthttp.RequestCtx) {
 		internal.CheckError(err)
 		err = json.Unmarshal([]byte(userKeyString), &userKeyArray)
 		internal.CheckError(err)
-		fmt.Println(userKeyString)
-		fmt.Println(userKeyArray)
 	}
 
 	userKeyArray = append(userKeyArray, newApiKeyMessage.Key)
-	fmt.Println(userKeyArray)
 	userKeyBytes, err := json.Marshal(userKeyArray)
 	h.storageManager.SaveBinaryKeyData(internal.UserBucketName, accountId, userKeyBytes)
 
