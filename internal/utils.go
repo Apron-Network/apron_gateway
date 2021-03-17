@@ -41,3 +41,4 @@ func GenTimestamp() string {
 }
 
 const ServiceBucketName = "ApronService"
+const UserBucketName = "ApronUser"

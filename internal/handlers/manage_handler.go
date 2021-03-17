@@ -59,6 +59,7 @@ func (h *ManagerHandler) InitRouters() {
 	userRouter := h.r.Group("/users")
 	userRouter.GET("/", h.userProfileHandler)
 	userRouter.PUT("/", h.updateUserProfileHandler)
+	userRouter.GET("/keys", h.listAllUserKeysHandler)
 }
 
 func (h *ManagerHandler) indexHandler(ctx *fasthttp.RequestCtx) {

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/golang/protobuf/jsonpb"
@@ -53,11 +54,30 @@ func (h *ManagerHandler) listApiKeysHandler(ctx *fasthttp.RequestCtx) {
 // and uses its Key value as store key,
 // while a protobuf serialized ApronApiKey object will be saved as its content.
 func (h *ManagerHandler) newApiKeyHandler(ctx *fasthttp.RequestCtx) {
+	postBody := ctx.PostBody()
+	if len(postBody) == 0 {
+		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+		ctx.SetBodyString("missing field account_id in post body")
+		return
+	}
+
+	var parsedRslt map[string]string
+	err := json.Unmarshal(postBody, &parsedRslt)
+	internal.CheckError(err)
+
+	accountId, ok := parsedRslt["account_id"]
+	if !ok {
+		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+		ctx.SetBodyString("missing field account_id in post body")
+		return
+	}
+
 	// Build key object and save to redis
 	newApiKeyMessage := models.ApronApiKey{
 		Key:         uuid.NewString(),
 		ServiceName: ctx.UserValue("service_name").(string),
 		IssuedAt:    time.Now().Unix(),
+		AccountId:   accountId,
 	}
 
 	binaryNewApiKey, err := proto.Marshal(&newApiKeyMessage)
@@ -68,6 +88,22 @@ func (h *ManagerHandler) newApiKeyHandler(ctx *fasthttp.RequestCtx) {
 		binaryNewApiKey,
 	)
 	internal.CheckError(err)
+
+	// Append generated key to user bucket
+	var userKeyArray []string
+	if h.storageManager.IsKeyExistingInBucket(internal.UserBucketName, accountId) {
+		userKeyString, err := h.storageManager.GetRecord(internal.UserBucketName, accountId)
+		internal.CheckError(err)
+		err = json.Unmarshal([]byte(userKeyString), &userKeyArray)
+		internal.CheckError(err)
+		fmt.Println(userKeyString)
+		fmt.Println(userKeyArray)
+	}
+
+	userKeyArray = append(userKeyArray, newApiKeyMessage.Key)
+	fmt.Println(userKeyArray)
+	userKeyBytes, err := json.Marshal(userKeyArray)
+	h.storageManager.SaveBinaryKeyData(internal.UserBucketName, accountId, userKeyBytes)
 
 	// Build response
 	m := jsonpb.Marshaler{}
