@@ -1,3 +1,5 @@
+
+
 # The Gateway for Apron Project
 
 Apron gateway handles the authentication and authorization of user who want to access revisited services,
@@ -85,17 +87,35 @@ the default value will be used.
 
 ### Create a service
 
+*POST /service/*
+
+| Param    | Type   | Desc                                                         | Sample value           |
+| -------- | ------ | ------------------------------------------------------------ | ---------------------- |
+| name     | string | Name of service, will be used while generating key           | `test_httpbin_service` |
+| base_url | string | Base url or name for service, all request will be forwarded to this | httpbin/               |
+| schema   | string | Schema for building service, support http, https, ws, wss    | http                   |
+
+
+
 ```shell
-# http -j post http://localhost:8082/service/ name=test_httpbin_service base_url=httpbin/ schema=http
-$ curl 
+$ http -j post http://localhost:8082/service/ name=test_httpbin_service base_url=httpbin/ schema=http
 
 ```
 
 If service created successfully, service will return status 201.
 
 ### Create a user key
+
+*POST /service/<service_name>/keys/*
+
+| Params     | Type   | Desc                   | Sample value    |
+| ---------- | ------ | ---------------------- | --------------- |
+| account_id | string | Account id of this key | test_account_id |
+
+
+
 ```shell
-$ http post http://localhost:8082/service/test_httpbin_service/keys/
+$ http post http://localhost:8082/service/test_httpbin_service/keys/ account_id=test_account_id
 ```
 
 This is a sample response
@@ -104,13 +124,17 @@ This is a sample response
 {
     "issuedAt": "1615338539",
     "key": "a6d9c1b2-0bc0-43ec-b8b1-f4aa5a443288",
-    "serviceName": "test_httpbin_service"
+    "serviceName": "test_httpbin_service",
+  	"accountId": "test_account_id"
 }
 ```
 
 ### Access the service via proxy
+
+*GET /v1/<service_name>/<user_key>/<requests>*
+
 ```shell
-http http://localhost:8080/v1/test_httpbin_service/a6d9c1b2-0bc0-43ec-b8b1-f4aa5a443288/anything/foobar
+$ http http://localhost:8080/v1/test_httpbin_service/a6d9c1b2-0bc0-43ec-b8b1-f4aa5a443288/anything/foobar
 ```
 
 This is a sample reponse
@@ -137,6 +161,8 @@ This is a sample reponse
 ```
 
 ### Get usage report
+
+*GET /service/report/*
 
 ```shell
 $ http http://localhost:8082/service/report/
