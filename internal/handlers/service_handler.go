@@ -12,7 +12,37 @@ import (
 )
 
 func (h *ManagerHandler) listServiceHandler(ctx *fasthttp.RequestCtx) {
-	fmt.Fprintf(ctx, "List Service")
+	var cursor uint64
+	rslt := make([]*models.ApronService, 0, 100)
+
+	for {
+		scanResultMap, nextCursor, _, err := h.storageManager.FetchRecords(
+			internal.ServiceBucketName,
+			int(cursor),
+			"",
+			100,
+		)
+		internal.CheckError(err)
+
+		fmt.Printf("%+v\n", scanResultMap)
+
+		for _, v := range scanResultMap {
+			tmpRcd := &models.ApronService{}
+			err := proto.Unmarshal([]byte(v), tmpRcd)
+			internal.CheckError(err)
+			rslt = append(rslt, tmpRcd)
+		}
+
+		if nextCursor == 0 {
+			break
+		} else {
+			cursor = nextCursor
+		}
+	}
+
+	respBody, err := json.Marshal(rslt)
+	internal.CheckError(err)
+	ctx.Write(respBody)
 }
 
 // newServiceHandler parse request and create service in store.
