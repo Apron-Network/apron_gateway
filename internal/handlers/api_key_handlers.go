@@ -15,9 +15,9 @@ import (
 
 // listApiKeysHandler loads specified size keys from service api key hash bucket and return
 func (h *ManagerHandler) listApiKeysHandler(ctx *fasthttp.RequestCtx) {
-	serviceName := ctx.UserValue("service_name").(string)
+	serviceId := ctx.UserValue("service_id").(string)
 	scanResultMap, cursor, resultCount, err := h.storageManager.FetchRecords(
-		internal.ServiceApiKeyStorageBucketName(serviceName),
+		internal.ServiceApiKeyStorageBucketName(serviceId),
 		internal.ExtractQueryIntValue(ctx, "start", 0),
 		"",
 		internal.ExtractQueryIntValue(ctx, "count", 10),
@@ -37,7 +37,7 @@ func (h *ManagerHandler) listApiKeysHandler(ctx *fasthttp.RequestCtx) {
 	internal.CheckError(err)
 
 	resp := ListApiKeysResponse{
-		ServiceId:  serviceName,
+		ServiceId:  serviceId,
 		Records:    rslt,
 		Count:      resultCount,
 		NextCursor: cursor,
@@ -49,7 +49,7 @@ func (h *ManagerHandler) listApiKeysHandler(ctx *fasthttp.RequestCtx) {
 }
 
 // newApiKeyHandler create a new key and relationship between key and service.
-// The new key will be saved in table/bucket ApronApiKey:<service_name>,
+// The new key will be saved in table/bucket ApronApiKey:<service_id>,
 // and uses its Key value as store key,
 // while a protobuf serialized ApronApiKey object will be saved as its content.
 func (h *ManagerHandler) newApiKeyHandler(ctx *fasthttp.RequestCtx) {
@@ -73,16 +73,16 @@ func (h *ManagerHandler) newApiKeyHandler(ctx *fasthttp.RequestCtx) {
 
 	// Build key object and save to redis
 	newApiKeyMessage := models.ApronApiKey{
-		Key:         uuid.NewString(),
-		ServiceName: ctx.UserValue("service_name").(string),
-		IssuedAt:    time.Now().Unix(),
-		AccountId:   accountId,
+		Key:       uuid.NewString(),
+		ServiceId: ctx.UserValue("service_id").(string),
+		IssuedAt:  time.Now().Unix(),
+		AccountId: accountId,
 	}
 
 	binaryNewApiKey, err := proto.Marshal(&newApiKeyMessage)
 	internal.CheckError(err)
 	err = h.storageManager.SaveBinaryKeyData(
-		internal.ServiceApiKeyStorageBucketName(newApiKeyMessage.ServiceName),
+		internal.ServiceApiKeyStorageBucketName(newApiKeyMessage.ServiceId),
 		newApiKeyMessage.Key,
 		binaryNewApiKey,
 	)
@@ -108,7 +108,7 @@ func (h *ManagerHandler) newApiKeyHandler(ctx *fasthttp.RequestCtx) {
 }
 
 func (h *ManagerHandler) apiKeyDetailHandler(ctx *fasthttp.RequestCtx) {
-	serviceId := ctx.UserValue("service_name").(string)
+	serviceId := ctx.UserValue("service_id").(string)
 	key := ctx.UserValue("key_id").(string)
 	storageBucketName := internal.ServiceApiKeyStorageBucketName(serviceId)
 
@@ -134,7 +134,7 @@ func (h *ManagerHandler) updateApiKeyHandler(ctx *fasthttp.RequestCtx) {
 }
 
 func (h *ManagerHandler) deleteApiKeyHandler(ctx *fasthttp.RequestCtx) {
-	serviceId := ctx.UserValue("service_name").(string)
+	serviceId := ctx.UserValue("service_id").(string)
 	key := ctx.UserValue("key_id").(string)
 	storageBucketName := internal.ServiceApiKeyStorageBucketName(serviceId)
 

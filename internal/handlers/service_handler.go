@@ -27,13 +27,13 @@ func (h *ManagerHandler) newServiceHandler(ctx *fasthttp.RequestCtx) {
 	err = json.Unmarshal(detail.RequestBody, &service)
 	internal.CheckError(err)
 
-	if h.storageManager.IsKeyExistingInBucket(internal.ServiceBucketName, service.Name) {
+	if h.storageManager.IsKeyExistingInBucket(internal.ServiceBucketName, service.Id) {
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 		ctx.WriteString("duplicated service name")
 	} else {
 		binaryService, err := proto.Marshal(&service)
 		internal.CheckError(err)
-		err = h.storageManager.SaveBinaryKeyData(internal.ServiceBucketName, service.Name, binaryService)
+		err = h.storageManager.SaveBinaryKeyData(internal.ServiceBucketName, service.Id, binaryService)
 		internal.CheckError(err)
 
 		ctx.SetStatusCode(fasthttp.StatusCreated)
