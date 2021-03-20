@@ -16,6 +16,14 @@ def create_service(service_id, service_name: str, base_url: str, schema: str):
         'name': service_name,
         'base_url': base_url,
         'schema': schema,
+        'desc': 'service desc',
+        'logo': 'https://via.placeholder.com/150?text=Apron',
+        'create_time': int(time.time()),
+        'service_provider_name': 'sp',
+        'service_provider_account': 'sp_account',
+        'service_usage': 'usage',
+        'service_price_plan': 'price',
+        'service_declaimer': 'declaimer',
     }
     r = requests.post(url, json=payload)
     assert r.status_code == 201
@@ -49,7 +57,7 @@ def fetch_usage_report():
 if __name__ == '__main__':
     service_id = uuid.uuid4().hex
     service_name = str(int(time.time() * 1e3))
-    base_url = 'localhost:2345/'
+    base_url = 'httpbin/'
     schema = 'http'
     create_service(service_id, service_name, base_url, schema)
     k = create_key(service_id)
