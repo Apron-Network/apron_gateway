@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -29,6 +28,7 @@ type ProxyHandler struct {
 	AggrAccessRecordManager models.AggregatedAccessRecordManager
 	AccessLogChannel        chan string
 
+	upgrader         *websocket.FastHTTPUpgrader
 	requestDetail    *models.RequestDetail
 	serviceAggrCount map[string]uint32 // Simple aggr count for detail logs
 }
@@ -50,7 +50,7 @@ func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
 	fmt.Printf("X-Ratelimit-Remaining: %s\n", strconv.FormatInt(int64(res.Remaining), 10))
 	fmt.Printf("X-Ratelimit-Reset: %s\n", strconv.FormatInt(res.Reset.Unix(), 10))
 
-	//TODO: handle the case of no remain resource left, the key point is how to notify clients in response
+	// TODO: handle the case of no remain resource left, the key point is how to notify clients in response
 	if res.Remaining < 0 {
 		after := int64(res.Reset.Sub(time.Now())) / 1e9
 		fmt.Printf("Retry-After: %s\n", strconv.FormatInt(after, 10))
@@ -105,44 +105,56 @@ func (h *ProxyHandler) ForwardHandler(ctx *fasthttp.RequestCtx) {
 	if websocket.FastHTTPIsWebSocketUpgrade(ctx) && (service.Schema == "ws" || service.Schema == "wss") {
 		h.forwardWebsocketRequest(ctx, service)
 	} else if service.Schema == "http" || service.Schema == "https" {
-		h.forwardHttpRequest(ctx, service)
+		fmt.Println("HTTP")
 	} else {
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 		ctx.SetBodyString("regisited service has different schema with request")
 	}
 }
 func (h *ProxyHandler) forwardWebsocketRequest(ctx *fasthttp.RequestCtx, service models.ApronService) {
-	upgrader := websocket.FastHTTPUpgrader{
+	h.upgrader = &websocket.FastHTTPUpgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
+		CheckOrigin: func(ctx *fasthttp.RequestCtx) bool {
+			return true
+		},
 	}
 
-	upgrader.Upgrade(ctx, func(ws *websocket.Conn) {
-		serviceUrlStr := fmt.Sprintf("%s://%s", service.Schema, service.BaseUrl)
-		serviceUrl, _ := url.Parse(serviceUrlStr)
-		fmt.Printf("Service url: %+v\n", serviceUrl)
+	var err error
 
-		dialer := websocket.Dialer{
-			HandshakeTimeout: 15 * time.Second,
-		}
+	serviceUrlStr := fmt.Sprintf("%s://%s", service.Schema, service.BaseUrl)
+	serviceUrl, _ := url.Parse(serviceUrlStr)
+	fmt.Printf("Service url: %+v\n", serviceUrl)
 
-		// TODO: Check whether header information are required for service ws
-		serviceConnection, _, err := dialer.Dial(serviceUrl.String(), nil)
-		internal.CheckError(err)
+	dialer := websocket.Dialer{
+		HandshakeTimeout: 15 * time.Second,
+	}
+
+	// TODO: Check whether header information are required for service ws
+	proxyServerWsConn, _, err := dialer.Dial(serviceUrl.String(), nil)
+	internal.CheckError(err)
+
+	err = h.upgrader.Upgrade(ctx, func(clientWsConn *websocket.Conn) {
+		defer clientWsConn.Close()
+
+		var (
+			errClient      = make(chan error, 1)
+			errProxyServer = make(chan error, 1)
+		)
+
+		go forwardWsMessage(clientWsConn, proxyServerWsConn, errClient)
+		go forwardWsMessage(proxyServerWsConn, clientWsConn, errProxyServer)
 
 		for {
-			messageType, p, err := serviceConnection.ReadMessage()
-			if err != nil {
-				log.Println(err)
-				return
-			}
-
-			if err := ws.WriteMessage(messageType, p); err != nil {
-				log.Println(err)
-				return
+			select {
+			case err := <-errClient:
+				fmt.Sprintf("Error while forwarding response: %+v\n", err.Error())
+			case err := <-errProxyServer:
+				fmt.Sprintf("Error while forwarding request: %+v\n", err.Error())
 			}
 		}
 	})
+	internal.CheckError(err)
 }
 
 func (h *ProxyHandler) forwardHttpRequest(ctx *fasthttp.RequestCtx, service models.ApronService) {
@@ -217,4 +229,34 @@ func (h *ProxyHandler) loadService(serviceName string) models.ApronService {
 	internal.CheckError(err)
 
 	return service
+}
+
+func forwardWsMessage(src, dest *websocket.Conn, errCh chan error) {
+	for {
+		msgType, msgBytes, err := src.ReadMessage()
+
+		if err != nil {
+			fmt.Printf("src.ReadMessage failed, msgType=%d, msg=%s, err=%v\n", msgType, msgBytes, err)
+			if ce, ok := err.(*websocket.CloseError); ok {
+				msgBytes = websocket.FormatCloseMessage(ce.Code, ce.Text)
+			} else {
+				msgBytes = websocket.FormatCloseMessage(websocket.CloseAbnormalClosure, err.Error())
+			}
+
+			errCh <- err
+
+			if err = dest.WriteMessage(websocket.CloseMessage, msgBytes); err != nil {
+				fmt.Printf("write close message failed, err=%v", err)
+			}
+
+			break
+		}
+
+		dest.WriteMessage(msgType, msgBytes)
+		if err != nil {
+			fmt.Printf("dest.WriteMessage error: %v\n", err)
+			errCh <- err
+			break
+		}
+	}
 }
