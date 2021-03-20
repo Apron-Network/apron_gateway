@@ -1,7 +1,6 @@
 package main
 
 import (
-	"apron.network/gateway/internal"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,6 +8,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"apron.network/gateway/internal"
 
 	"github.com/valyala/fasthttp"
 
@@ -20,7 +21,7 @@ import (
 )
 
 var (
-	corsAllowHeaders     = "authorization"
+	corsAllowHeaders     = "authorization, Origin, X-Requested-With, Content-Type, Accept"
 	corsAllowMethods     = "HEAD,GET,POST,PUT,DELETE,OPTIONS"
 	corsAllowOrigin      = "*"
 	corsAllowCredentials = "true"
