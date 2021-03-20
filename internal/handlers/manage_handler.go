@@ -8,6 +8,7 @@ import (
 	"apron.network/gateway/internal"
 	"github.com/fasthttp/router"
 	"github.com/fasthttp/websocket"
+	"github.com/google/uuid"
 	"github.com/valyala/fasthttp"
 
 	"apron.network/gateway/internal/models"
@@ -20,10 +21,12 @@ type ManagerHandler struct {
 	storageManager   *models.StorageManager
 	r                *router.Router
 	AccessLogChannel chan string
+	wsConns          map[string]*websocket.Conn
 }
 
 func (h *ManagerHandler) InitStore(storeMgr *models.StorageManager) {
 	h.storageManager = storeMgr
+	h.wsConns = make(map[string]*websocket.Conn)
 }
 
 func (h *ManagerHandler) Handler() func(ctx *fasthttp.RequestCtx) {
@@ -79,11 +82,24 @@ func (h *ManagerHandler) detailedUserReportHandler(ctx *fasthttp.RequestCtx) {
 		var logMsg string
 
 		err := upgrader.Upgrade(ctx, func(ws *websocket.Conn) {
+			h.wsConns[uuid.NewString()] = ws
 			for {
 				logMsg = <-h.AccessLogChannel
-				if err := ws.WriteMessage(websocket.TextMessage, []byte(logMsg)); err != nil {
-					log.Println(err)
-					return
+
+				failedWsConnKey := make([]string, 0, len(h.wsConns))
+
+				// Loop over existing websocket connections to send out the data
+				for wsKey, wsConn := range h.wsConns {
+					if err := wsConn.WriteMessage(websocket.TextMessage, []byte(logMsg)); err != nil {
+						log.Println(err)
+						failedWsConnKey = append(failedWsConnKey, wsKey)
+					}
+				}
+
+				// Clear error websocket connections
+				for _, k := range failedWsConnKey {
+					log.Printf("Remove ws key %s from list\n", k)
+					delete(h.wsConns, k)
 				}
 			}
 		})
