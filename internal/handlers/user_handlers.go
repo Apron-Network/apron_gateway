@@ -48,7 +48,14 @@ func (h *ManagerHandler) listAllUserKeysHandler(ctx *fasthttp.RequestCtx) {
 	detail, err := models.ExtractCtxRequestDetail(ctx)
 	internal.CheckError(err)
 
-	accountId := detail.QueryParams["account_id"][0]
+	accountIdValue := detail.QueryParams["account_id"]
+	if len(accountIdValue) == 0 {
+		ctx.SetStatusCode(fasthttp.StatusBadRequest)
+		ctx.SetBodyString("missing account_id in query params")
+		return
+	}
+
+	accountId := accountIdValue[0]
 
 	if !h.storageManager.IsKeyExistingInBucket(internal.UserBucketName, accountId) {
 		ctx.SetBodyString("[]")
