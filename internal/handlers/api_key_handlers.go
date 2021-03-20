@@ -6,7 +6,6 @@ import (
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
-	"github.com/google/uuid"
 	"github.com/valyala/fasthttp"
 
 	"apron.network/gateway/internal"
@@ -73,7 +72,7 @@ func (h *ManagerHandler) newApiKeyHandler(ctx *fasthttp.RequestCtx) {
 
 	// Build key object and save to redis
 	newApiKeyMessage := models.ApronApiKey{
-		Key:       uuid.NewString(),
+		Key:       accountId,
 		ServiceId: ctx.UserValue("service_id").(string),
 		IssuedAt:  time.Now().Unix(),
 		AccountId: accountId,
@@ -89,17 +88,14 @@ func (h *ManagerHandler) newApiKeyHandler(ctx *fasthttp.RequestCtx) {
 	internal.CheckError(err)
 
 	// Append generated key to user bucket
+	// Currently accountId is used as key in the bucket, so there is only one record in the user key bucket.
 	var userKeyArray []string
-	if h.storageManager.IsKeyExistingInBucket(internal.UserBucketName, accountId) {
-		userKeyString, err := h.storageManager.GetRecord(internal.UserBucketName, accountId)
+	if !h.storageManager.IsKeyExistingInBucket(internal.UserBucketName, accountId) {
+		userKeyArray = append(userKeyArray, newApiKeyMessage.Key)
+		userKeyBytes, err := json.Marshal(userKeyArray)
 		internal.CheckError(err)
-		err = json.Unmarshal([]byte(userKeyString), &userKeyArray)
-		internal.CheckError(err)
+		h.storageManager.SaveBinaryKeyData(internal.UserBucketName, accountId, userKeyBytes)
 	}
-
-	userKeyArray = append(userKeyArray, newApiKeyMessage.Key)
-	userKeyBytes, err := json.Marshal(userKeyArray)
-	h.storageManager.SaveBinaryKeyData(internal.UserBucketName, accountId, userKeyBytes)
 
 	// Build response
 	m := jsonpb.Marshaler{}
