@@ -15,6 +15,14 @@ message ApronService {
   string name = 2;
   string base_url = 3;
   string schema = 4;
+  string desc = 5;
+  string logo = 6;
+  uint64 create_time = 7;
+  string service_provider_name = 8;
+  string service_provider_account = 9;
+  string service_usage = 10;
+  string service_price_plan = 11;
+  string service_declaimer = 12;
 }
 
 message ApronUser {
