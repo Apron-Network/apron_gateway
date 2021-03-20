@@ -57,7 +57,7 @@ func (h *ManagerHandler) InitRouters() {
 
 	// User mgmt related
 	userRouter := h.r.Group("/users")
-	userRouter.GET("/", h.userProfileHandler)
+	userRouter.GET("/", h.listAllUsersHandler)
 	userRouter.PUT("/", h.updateUserProfileHandler)
 	userRouter.GET("/keys", h.listAllUserKeysHandler)
 }

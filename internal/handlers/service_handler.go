@@ -15,6 +15,7 @@ func (h *ManagerHandler) listServiceHandler(ctx *fasthttp.RequestCtx) {
 	var cursor uint64
 	rslt := make([]*models.ApronService, 0, 100)
 
+	// TODO: Refactor this scanall with function
 	for {
 		scanResultMap, nextCursor, _, err := h.storageManager.FetchRecords(
 			internal.ServiceBucketName,
@@ -23,8 +24,6 @@ func (h *ManagerHandler) listServiceHandler(ctx *fasthttp.RequestCtx) {
 			100,
 		)
 		internal.CheckError(err)
-
-		fmt.Printf("%+v\n", scanResultMap)
 
 		for _, v := range scanResultMap {
 			tmpRcd := &models.ApronService{}
