@@ -105,7 +105,7 @@ func (h *ProxyHandler) ForwardHandler(ctx *fasthttp.RequestCtx) {
 	if websocket.FastHTTPIsWebSocketUpgrade(ctx) && (service.Schema == "ws" || service.Schema == "wss") {
 		h.forwardWebsocketRequest(ctx, service)
 	} else if service.Schema == "http" || service.Schema == "https" {
-		fmt.Println("HTTP")
+		h.forwardHttpRequest(ctx, service)
 	} else {
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 		ctx.SetBodyString("regisited service has different schema with request")
@@ -173,7 +173,7 @@ func (h *ProxyHandler) forwardHttpRequest(ctx *fasthttp.RequestCtx, service mode
 	}
 	serviceUrl.RawQuery = query.Encode()
 
-	// fmt.Printf("host: %+v, path: %+v, queries: %+v\n", serviceUrl.Host, serviceUrl.Path, serviceUrl.RawQuery)
+	fmt.Printf("host: %+v, path: %+v, queries: %+v\n", serviceUrl.Host, serviceUrl.Path, serviceUrl.RawQuery)
 
 	// Build request, query params are included in URI
 	proxyReq := fasthttp.AcquireRequest()
