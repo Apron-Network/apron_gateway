@@ -5,17 +5,20 @@ import uuid
 
 import requests
 
-api_url = 'http://localhost:8082'
-proxy_url = 'http://localhost:8080'
+schema = 'http'
+api_host = 'localhost:8082'
+proxy_host = 'localhost:8080'
+
+api_url = f'{schema}://{api_host}'
+proxy_url = f'{schema}://{proxy_host}'
 
 
-def create_service(service_id, service_name: str, base_url: str, schema: str):
+def create_service(service_host: str, base_rest_url: str, base_ws_url: str):
     url = f'{api_url}/service/'
     payload = {
-        'id': service_id,
-        'name': service_name,
-        'base_url': base_url,
-        'schema': schema,
+        'host': service_host,
+        'base_rest_url': base_rest_url,
+        'base_ws_url': base_ws_url,
         'desc': 'service desc',
         'logo': 'https://via.placeholder.com/150?text=Apron',
         'create_time': int(time.time()),
@@ -31,7 +34,9 @@ def create_service(service_id, service_name: str, base_url: str, schema: str):
 
 def create_key(service_id: str) -> str:
     url = f'{api_url}/service/{service_id}/keys/'
+    print(url)
     r = requests.post(url, json={'account_id': 'foobar'})
+    print(r.content)
     assert r.status_code == 200
 
     rslt = r.json()
@@ -39,8 +44,8 @@ def create_key(service_id: str) -> str:
     return rslt['key']
 
 
-def send_request(service_id: str, user_key: str, payload: typing.Dict):
-    url = f'{proxy_url}/v1/{service_id}/{user_key}/anything/aaa'
+def send_request(user_key: str, payload: typing.Dict):
+    url = f'{proxy_url}/v1/{user_key}/anything/aaa'
     r = requests.post(url, json=payload)
     assert r.status_code == 200
     print(json.dumps(r.json(), indent=2))
@@ -55,16 +60,15 @@ def fetch_usage_report():
 
 
 if __name__ == '__main__':
-    service_id = uuid.uuid4().hex
-    service_name = str(int(time.time() * 1e3))
-    base_url = 'httpbin/'
-    schema = 'http'
-    create_service(service_id, service_name, base_url, schema)
-    k = create_key(service_id)
+    service_host = proxy_host
+    base_rest_url = 'https://httpbin.org/'
+    base_ws_url = 'ws://localhost:8765/'
+    create_service(service_host, base_rest_url, base_ws_url)
+    k = create_key(service_host)
 
     for _ in range(3):
         print('-' * 20)
-        send_request(service_id, k, {'now': time.time()})
+        send_request(k, {'now': time.time()})
         time.sleep(1)
 
     print('+' * 20)
