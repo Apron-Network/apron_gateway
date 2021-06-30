@@ -43,7 +43,7 @@ func (h *ManagerHandler) InitRouters() {
 	// Service related
 	serviceRouter := h.r.Group("/service")
 	serviceRouter.GET("/", h.listServiceHandler)
-	serviceRouter.GET("/{service_name}/report/{key_id}", h.serviceUsageReportHandler)
+	serviceRouter.GET("/{service_id}/report/{key_id}", h.serviceUsageReportHandler)
 	serviceRouter.GET("/report/", h.allUsageReportHandler)
 	serviceRouter.POST("/", h.newServiceHandler)
 

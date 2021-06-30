@@ -78,7 +78,7 @@ func (h *ProxyHandler) InternalHandler(ctx *fasthttp.RequestCtx) {
 		Ts:          int64(int(time.Now().UnixNano() / 1e6)),
 		ServiceName: requestDetail.ServiceNameStr,
 		UserKey:     requestDetail.ApiKeyStr,
-		RequestIp:   string(ctx.RemoteIP().String()),
+		RequestIp:   ctx.RemoteIP().String(),
 		RequestPath: string(requestDetail.ProxyRequestPath),
 	}
 	access_log_bytes, err := json.Marshal(&access_log)

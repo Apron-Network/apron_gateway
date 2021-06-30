@@ -2,8 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/valyala/fasthttp"
 
@@ -56,13 +54,13 @@ func (h *ManagerHandler) newServiceHandler(ctx *fasthttp.RequestCtx) {
 	err = json.Unmarshal(detail.RequestBody, &service)
 	internal.CheckError(err)
 
-	if h.storageManager.IsKeyExistingInBucket(internal.ServiceBucketName, service.Id) {
+	if h.storageManager.IsKeyExistingInBucket(internal.ServiceBucketName, internal.ServiceHostnameToId(service.Host)) {
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
 		ctx.WriteString("duplicated service name")
 	} else {
 		binaryService, err := proto.Marshal(&service)
 		internal.CheckError(err)
-		err = h.storageManager.SaveBinaryKeyData(internal.ServiceBucketName, service.Id, binaryService)
+		err = h.storageManager.SaveBinaryKeyData(internal.ServiceBucketName, internal.ServiceHostnameToId(service.Host), binaryService)
 		internal.CheckError(err)
 
 		ctx.SetStatusCode(fasthttp.StatusCreated)
@@ -70,7 +68,7 @@ func (h *ManagerHandler) newServiceHandler(ctx *fasthttp.RequestCtx) {
 }
 
 func (h *ManagerHandler) serviceUsageReportHandler(ctx *fasthttp.RequestCtx) {
-	serviceId := ctx.UserValue("service_name").(string)
+	serviceId := ctx.UserValue("service_id").(string)
 	keyId := ctx.UserValue("key_id").(string)
 	rslt, err := h.AggrAccessRecordManager.ExportUsage(serviceId, keyId)
 	if err != nil {
