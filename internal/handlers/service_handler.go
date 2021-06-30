@@ -68,16 +68,7 @@ func (h *ManagerHandler) newServiceHandler(ctx *fasthttp.RequestCtx) {
 		ctx.SetStatusCode(fasthttp.StatusCreated)
 	}
 }
-func (h *ManagerHandler) serviceDetailHandler(ctx *fasthttp.RequestCtx) {
-	fmt.Fprintf(ctx, "Service Detail")
-}
-func (h *ManagerHandler) updateServiceHandler(ctx *fasthttp.RequestCtx) {
-	fmt.Fprintf(ctx, "Update Service")
-}
 
-func (h *ManagerHandler) deleteServiceHandler(ctx *fasthttp.RequestCtx) {
-	fmt.Fprintf(ctx, "Delete Service")
-}
 func (h *ManagerHandler) serviceUsageReportHandler(ctx *fasthttp.RequestCtx) {
 	serviceId := ctx.UserValue("service_name").(string)
 	keyId := ctx.UserValue("key_id").(string)

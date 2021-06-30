@@ -46,9 +46,6 @@ func (h *ManagerHandler) InitRouters() {
 	serviceRouter.GET("/{service_name}/report/{key_id}", h.serviceUsageReportHandler)
 	serviceRouter.GET("/report/", h.allUsageReportHandler)
 	serviceRouter.POST("/", h.newServiceHandler)
-	serviceRouter.POST("/{service_name}", h.serviceDetailHandler)
-	serviceRouter.PUT("/{service_name}", h.updateServiceHandler)
-	serviceRouter.DELETE("/{service_name}", h.deleteServiceHandler)
 
 	// API key related
 	apiKeyRouter := serviceRouter.Group("/{service_id}/keys")
