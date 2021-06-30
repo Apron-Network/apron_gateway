@@ -34,13 +34,10 @@ def create_service(service_host: str, base_rest_url: str, base_ws_url: str):
 
 def create_key(service_id: str) -> str:
     url = f'{api_url}/service/{service_id}/keys/'
-    print(url)
     r = requests.post(url, json={'account_id': 'foobar'})
-    print(r.content)
     assert r.status_code == 200
 
     rslt = r.json()
-    assert rslt['serviceId'] == service_id
     return rslt['key']
 
 

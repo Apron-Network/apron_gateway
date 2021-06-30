@@ -73,7 +73,7 @@ func (h *ManagerHandler) newApiKeyHandler(ctx *fasthttp.RequestCtx) {
 	// Build key object and save to redis
 	newApiKeyMessage := models.ApronApiKey{
 		Key:       accountId,
-		ServiceId: ctx.UserValue("service_id").(string),
+		ServiceId: internal.ServiceHostnameToId(ctx.UserValue("service_id").(string)),
 		IssuedAt:  time.Now().Unix(),
 		AccountId: accountId,
 	}
