@@ -1,13 +1,15 @@
 package models
 
 import (
+	"apron.network/gateway/internal"
+	"bytes"
+	"fmt"
+	"github.com/valyala/fasthttp"
 	"regexp"
 	"strconv"
-
-	"github.com/valyala/fasthttp"
 )
 
-var ProxyRequestPathPattern = regexp.MustCompile(`(?m)/v([1-9]\d{0,3})/([\w-]+)/([\w-]+)/(.*)`)
+var ProxyRequestPathPattern = regexp.MustCompile(`(?m)/v([1-9]\d{0,3})/([\w-]+)/(.*)`)
 
 type RequestDetail struct {
 	URI              *fasthttp.URI
@@ -34,12 +36,23 @@ func ExtractCtxRequestDetail(ctx *fasthttp.RequestCtx) (*RequestDetail, error) {
 	detail.Host = ctx.Host()
 	detail.Path = ctx.URI().Path()
 
-	pathMatchResult := ProxyRequestPathPattern.FindAllSubmatch(detail.Path, -1)
-	if len(pathMatchResult) == 1 && len(pathMatchResult[0]) == 5 {
+	pathWithKey := detail.Path
+
+	if bytes.HasPrefix(detail.Path, []byte("/ws")) {
+		// Remove /ws prefix to match regexp for extracting version and key
+		pathWithKey = pathWithKey[3:]
+	}
+
+	detail.ServiceName = internal.ServiceHostnameToIdByte(detail.Host)
+
+	pathMatchResult := ProxyRequestPathPattern.FindAllSubmatch(pathWithKey, -1)
+	fmt.Printf("Path with k: %+q\n", pathWithKey)
+	fmt.Printf("Match rslt: %+q\n", pathMatchResult)
+
+	if len(pathMatchResult) == 1 && len(pathMatchResult[0]) == 4 {
 		detail.Version, _ = strconv.Atoi(string(pathMatchResult[0][1]))
-		detail.ServiceName = pathMatchResult[0][2]
-		detail.ApiKey = pathMatchResult[0][3]
-		detail.ProxyRequestPath = pathMatchResult[0][4]
+		detail.ApiKey = pathMatchResult[0][2]
+		detail.ProxyRequestPath = pathMatchResult[0][3]
 
 		detail.ServiceNameStr = string(detail.ServiceName)
 		detail.ApiKeyStr = string(detail.ApiKey)

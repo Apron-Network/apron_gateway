@@ -1,9 +1,11 @@
 package internal
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/valyala/fasthttp"
@@ -30,8 +32,16 @@ func ExtractQueryIntValue(ctx *fasthttp.RequestCtx, argName string, defaultValue
 	}
 }
 
-func ServiceApiKeyStorageBucketName(service_id string) string {
-	return fmt.Sprintf("ApronApiKey:%s", service_id)
+func ServiceHostnameToId(hostname string) string {
+	return strings.Replace(hostname, ".", "_", -1)
+}
+
+func ServiceHostnameToIdByte(hostname []byte) []byte {
+	return bytes.Replace(hostname, []byte("."), []byte("_"), -1)
+}
+
+func ServiceApiKeyStorageBucketName(serviceId string) string {
+	return fmt.Sprintf("ApronApiKey:%s", serviceId)
 }
 
 // GenTimestamp ...
