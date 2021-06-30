@@ -102,13 +102,13 @@ func (h *ProxyHandler) ForwardHandler(ctx *fasthttp.RequestCtx) {
 
 	service := h.loadService(h.requestDetail.ServiceNameStr)
 
-	if websocket.FastHTTPIsWebSocketUpgrade(ctx) && (service.Schema == "ws" || service.Schema == "wss") {
+	if websocket.FastHTTPIsWebSocketUpgrade(ctx) && (service.BaseWsUrl != "") {
 		h.forwardWebsocketRequest(ctx, service)
-	} else if service.Schema == "http" || service.Schema == "https" {
+	} else if service.BaseRestUrl != "" {
 		h.forwardHttpRequest(ctx, service)
 	} else {
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
-		ctx.SetBodyString("regisited service has different schema with request")
+		ctx.SetBodyString("register service has different schema with request")
 	}
 }
 func (h *ProxyHandler) forwardWebsocketRequest(ctx *fasthttp.RequestCtx, service models.ApronService) {
@@ -122,9 +122,7 @@ func (h *ProxyHandler) forwardWebsocketRequest(ctx *fasthttp.RequestCtx, service
 
 	var err error
 
-	serviceUrlStr := fmt.Sprintf("%s://%s", service.Schema, service.BaseUrl)
-	serviceUrl, _ := url.Parse(serviceUrlStr)
-	fmt.Printf("Service url: %+v\n", serviceUrl)
+	serviceUrl, _ := url.Parse(service.BaseWsUrl)
 
 	dialer := websocket.Dialer{
 		HandshakeTimeout: 15 * time.Second,
@@ -159,8 +157,7 @@ func (h *ProxyHandler) forwardWebsocketRequest(ctx *fasthttp.RequestCtx, service
 
 func (h *ProxyHandler) forwardHttpRequest(ctx *fasthttp.RequestCtx, service models.ApronService) {
 	// Build URI, the forward URL is local httpbin URL
-	serviceUrlStr := fmt.Sprintf("%s://%s", service.Schema, service.BaseUrl)
-	serviceUrl, _ := url.Parse(serviceUrlStr)
+	serviceUrl, _ := url.Parse(service.BaseRestUrl)
 	if bytes.Compare(h.requestDetail.Path, []byte("/")) != 0 {
 		serviceUrl.Path += string(h.requestDetail.ProxyRequestPath)
 	}
