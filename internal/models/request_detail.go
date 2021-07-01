@@ -9,7 +9,7 @@ import (
 	"strconv"
 )
 
-var ProxyRequestPathPattern = regexp.MustCompile(`(?m)/v([1-9]\d{0,3})/([\w-]+)/(.*)`)
+var ProxyRequestPathPattern = regexp.MustCompile(`(?m)/v([1-9]\d{0,3})/([\w-]+)/?(.*)`)
 
 type RequestDetail struct {
 	URI              *fasthttp.URI
@@ -46,8 +46,7 @@ func ExtractCtxRequestDetail(ctx *fasthttp.RequestCtx) (*RequestDetail, error) {
 	detail.ServiceName = internal.ServiceHostnameToIdByte(detail.Host)
 
 	pathMatchResult := ProxyRequestPathPattern.FindAllSubmatch(pathWithKey, -1)
-	fmt.Printf("Path with k: %+q\n", pathWithKey)
-	fmt.Printf("Match rslt: %+q\n", pathMatchResult)
+	fmt.Printf("Path with k: %+q, match rslt: %+v\n", pathWithKey, pathMatchResult)
 
 	if len(pathMatchResult) == 1 && len(pathMatchResult[0]) == 4 {
 		detail.Version, _ = strconv.Atoi(string(pathMatchResult[0][1]))
