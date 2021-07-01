@@ -232,7 +232,7 @@ func (h *ProxyHandler) loadService(serviceName string) models.ApronService {
 	}
 
 	if !strings.HasPrefix(service.BaseWsUrl, "ws") {
-		service.BaseRestUrl = fmt.Sprintf("ws://%s", service.BaseRestUrl)
+		service.BaseWsUrl = fmt.Sprintf("ws://%s", service.BaseWsUrl)
 	}
 
 	return service
