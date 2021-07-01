@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"apron.network/gateway/internal/handlers/ratelimiter"
@@ -224,6 +225,15 @@ func (h *ProxyHandler) loadService(serviceName string) models.ApronService {
 	service := models.ApronService{}
 	err = proto.Unmarshal([]byte(r), &service)
 	internal.CheckError(err)
+
+	// Add default prefix for rest and ws base url
+	if !strings.HasPrefix(service.BaseRestUrl, "http") {
+		service.BaseRestUrl = fmt.Sprintf("http://%s", service.BaseRestUrl)
+	}
+
+	if !strings.HasPrefix(service.BaseWsUrl, "ws") {
+		service.BaseRestUrl = fmt.Sprintf("ws://%s", service.BaseRestUrl)
+	}
 
 	return service
 }
