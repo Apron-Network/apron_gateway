@@ -12,8 +12,8 @@ message ApronApiKey {
 
 message ApronService {
   string host = 2;  // hostname provides this service, will be used to search service while forwarding requesting.
-  string base_rest_url = 3;
-  string base_ws_url = 4;
+  repeated string base_rest_url = 3;
+  repeated string base_ws_url = 4;
   string desc = 5;
   string logo = 6;
   uint64 create_time = 7;

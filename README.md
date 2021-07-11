@@ -60,7 +60,7 @@ While for the standalone setup, the service should be set before starting the ga
 The instruction below will use `localhost:6379` as the redis server address.
 
 This demo presents request forward to local httpbin service, which is running in a docker instance.
-Alternatively, the public httpbin service (http://httpbin.org) can also be used.
+And, the public httpbin service (http://httpbin.org) can also be used.
 
 ```shell
 $ docker run -it --rm -p 2345:80 kennethreitz/httpbin

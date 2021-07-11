@@ -13,7 +13,7 @@ api_url = f'{schema}://{api_host}'
 proxy_url = f'{schema}://{proxy_host}'
 
 
-def create_service(service_host: str, base_rest_url: str, base_ws_url: str):
+def create_service(service_host: str, base_rest_url: list, base_ws_url: list):
     url = f'{api_url}/service/'
     payload = {
         'host': service_host,
@@ -36,7 +36,6 @@ def create_key(service_id: str) -> str:
     url = f'{api_url}/service/{service_id}/keys/'
     r = requests.post(url, json={'account_id': 'foobar'})
     assert r.status_code == 200
-
     rslt = r.json()
     return rslt['key']
 
@@ -58,12 +57,12 @@ def fetch_usage_report():
 
 if __name__ == '__main__':
     service_host = proxy_host
-    base_rest_url = 'https://httpbin.org/'
-    base_ws_url = 'ws://localhost:8765/'
+    base_rest_url = ['https://httpbin.org/', 'http://localhost:2345/']
+    base_ws_url = ['ws://localhost:8765/']
     create_service(service_host, base_rest_url, base_ws_url)
     k = create_key(service_host)
 
-    for _ in range(3):
+    for _ in range(6):
         print('-' * 20)
         send_request(k, {'now': time.time()})
         time.sleep(1)

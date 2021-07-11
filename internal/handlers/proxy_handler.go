@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -103,9 +104,9 @@ func (h *ProxyHandler) ForwardHandler(ctx *fasthttp.RequestCtx) {
 
 	service := h.loadService(h.requestDetail.ServiceNameStr)
 
-	if websocket.FastHTTPIsWebSocketUpgrade(ctx) && (service.BaseWsUrl != "") {
+	if websocket.FastHTTPIsWebSocketUpgrade(ctx) && (checkBaseUrls(service.BaseWsUrl)) {
 		h.forwardWebsocketRequest(ctx, service)
-	} else if service.BaseRestUrl != "" {
+	} else if checkBaseUrls(service.BaseRestUrl) {
 		h.forwardHttpRequest(ctx, service)
 	} else {
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
@@ -123,7 +124,8 @@ func (h *ProxyHandler) forwardWebsocketRequest(ctx *fasthttp.RequestCtx, service
 
 	var err error
 
-	serviceUrl, _ := url.Parse(service.BaseWsUrl)
+	// Choose endpoint from service base urls.
+	serviceUrl, _ := url.Parse(chooseBaseUrl(service.BaseWsUrl))
 
 	dialer := websocket.Dialer{
 		HandshakeTimeout: 15 * time.Second,
@@ -158,7 +160,7 @@ func (h *ProxyHandler) forwardWebsocketRequest(ctx *fasthttp.RequestCtx, service
 
 func (h *ProxyHandler) forwardHttpRequest(ctx *fasthttp.RequestCtx, service models.ApronService) {
 	// Build URI, the forward URL is local httpbin URL
-	serviceUrl, _ := url.Parse(service.BaseRestUrl)
+	serviceUrl, _ := url.Parse(chooseBaseUrl(service.BaseRestUrl))
 	if bytes.Compare(h.requestDetail.Path, []byte("/")) != 0 {
 		serviceUrl.Path += string(h.requestDetail.ProxyRequestPath)
 	}
@@ -171,7 +173,7 @@ func (h *ProxyHandler) forwardHttpRequest(ctx *fasthttp.RequestCtx, service mode
 	}
 	serviceUrl.RawQuery = query.Encode()
 
-	fmt.Printf("host: %+v, path: %+v, queries: %+v\n", serviceUrl.Host, serviceUrl.Path, serviceUrl.RawQuery)
+	fmt.Printf("host: %+v, path: %+v, queries: %+v\n\n", serviceUrl.Host, serviceUrl.Path, serviceUrl.RawQuery)
 
 	// Build request, query params are included in URI
 	proxyReq := fasthttp.AcquireRequest()
@@ -179,10 +181,12 @@ func (h *ProxyHandler) forwardHttpRequest(ctx *fasthttp.RequestCtx, service mode
 	defer fasthttp.ReleaseRequest(proxyReq)
 	defer fasthttp.ReleaseResponse(proxyResp)
 
+	// fmt.Printf("base url: %s", serviceUrl.String())
 	proxyReq.SetRequestURI(serviceUrl.String())
 	ctx.Request.Header.VisitAll(func(k, v []byte) {
 		proxyReq.Header.SetCanonical(k, v)
 	})
+
 	proxyReq.Header.SetMethod(h.requestDetail.Method)
 	proxyReq.SetBody(h.requestDetail.RequestBody)
 	if err := fasthttp.Do(proxyReq, proxyResp); err != nil {
@@ -227,14 +231,17 @@ func (h *ProxyHandler) loadService(serviceName string) models.ApronService {
 	internal.CheckError(err)
 
 	// Add default prefix for rest and ws base url
-	if !strings.HasPrefix(service.BaseRestUrl, "http") {
-		service.BaseRestUrl = fmt.Sprintf("http://%s", service.BaseRestUrl)
+	for index, _ := range service.BaseRestUrl {
+		if !strings.HasPrefix(service.BaseRestUrl[index], "http") {
+			service.BaseRestUrl[index] = fmt.Sprintf("http://%s", service.BaseRestUrl[index])
+		}
 	}
 
-	if !strings.HasPrefix(service.BaseWsUrl, "ws") {
-		service.BaseWsUrl = fmt.Sprintf("ws://%s", service.BaseWsUrl)
+	for index, _ := range service.BaseWsUrl {
+		if !strings.HasPrefix(service.BaseWsUrl[index], "ws") {
+			service.BaseWsUrl[index] = fmt.Sprintf("ws://%s", service.BaseWsUrl[index])
+		}
 	}
-
 	return service
 }
 
@@ -267,3 +274,31 @@ func forwardWsMessage(src, dest *websocket.Conn, errCh chan error) {
 		}
 	}
 }
+
+func checkBaseUrls(baseUrls []string) bool {
+
+	flag := false
+	if baseUrls != nil && len(baseUrls) > 0 {
+		for _, value := range baseUrls {
+			if value != "" {
+				flag = true
+				break
+			}
+		}
+	}
+
+	return flag
+
+}
+
+func chooseBaseUrl(baseUrls []string) string {
+	index := rand.Intn(len(baseUrls))
+	// index := 0
+	// fmt.Printf("choose Base url[%d]: %s\n", index, baseUrls[index])
+	return baseUrls[index]
+}
+
+// @ToDo Add default prefix for rest and ws base url
+// func addDefaultPrefixForBaseUrls(service models.ApronService) {
+
+// }
